@@ -2,12 +2,14 @@
 CACHE_DIR = 'response_cache'
 PLAYERS_CACHE_SUBDIR = 'players'
 
+INPUTS_DIR = 'inputs'
+FANTRAX_EXPORT_FP = f'{INPUTS_DIR}/fantrax_export_latest.csv'
+
 # Directory to output the CSV into
 OUTPUTS_DIR = 'outputs'
 
 # NHL API documentation: https://gitlab.com/dword4/nhlapi/-/blob/master/stats-api.md
 NHL_API_BASE_URL = 'https://statsapi.web.nhl.com/api/v1'
-FANTRAX_EXPORT_FP = 'inputs/fantrax_export_latest.csv'
 
 # Number of years to retrieve draft results + team rosters history for.
 NUM_YEARS_DATA_TO_FETCH = 10

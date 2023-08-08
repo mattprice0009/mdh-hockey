@@ -24,5 +24,5 @@ setup(
   packages=find_packages(where='.', exclude=[]),
   include_package_data=True,
   package_data={ 'mdhhockey': package_data},
-  install_requires=[]
+  install_requires=['requests']
 )

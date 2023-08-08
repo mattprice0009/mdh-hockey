@@ -5,8 +5,8 @@ import re
 from datetime import datetime
 
 from mdhhockey.constants import (
-  _K, FANTRAX_EXPORT_FP, MISSING_PLAYERS, NHL_API_BASE_URL, NUM_YEARS_DATA_TO_FETCH,
-  OUTPUTS_DIR
+  _K, FANTRAX_EXPORT_FP, INPUTS_DIR, MISSING_PLAYERS, NHL_API_BASE_URL,
+  NUM_YEARS_DATA_TO_FETCH, OUTPUTS_DIR
 )
 from mdhhockey.helpers import _get, _pid, _replace_special_chars, calculate_age
 
@@ -153,6 +153,8 @@ def get_nhl_players_data():
 
 def load_fantrax_data_from_file():
   player_objs = []
+  if not os.path.exists(INPUTS_DIR):
+    os.mkdir(INPUTS_DIR)  # init directory
   with open(FANTRAX_EXPORT_FP, 'r') as csvfile:
     csvreader = csv.DictReader(csvfile, delimiter=',')
     for row in csvreader:
@@ -223,7 +225,7 @@ def generate_data_for_capfriendly():
 
   # 4. write to csv export
   if not os.path.exists(OUTPUTS_DIR):
-    os.mkdir(OUTPUTS_DIR)
+    os.mkdir(OUTPUTS_DIR)  # init directory
   with open(f'{OUTPUTS_DIR}/processed_data_for_cf.csv', 'w') as csvfile:
     headers = [
       _K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT
