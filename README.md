@@ -11,8 +11,8 @@ The output CSV is formatted to perfectly match the format & columns of the "All 
 ### Requirements to run
 
 1. Download a Players CSV export for all owned players from Fantrax.
-  a. On the "players" page in fantrax, filter by "All positions" and "Status - 'All taken players'" - this will give you a CSV containing all players under contract.
-  b. Move the CSV into the path defined in the `FANTRAX_EXPORT_FP` constant variable (make sure the file name matches).
+    * On the "players" page in fantrax, filter by "All positions" and "Status - 'All taken players'" - this will give you a CSV containing all players under contract.
+    * Move the CSV into the path defined in the `FANTRAX_EXPORT_FP` constant variable (make sure the file name matches).
 2. Install Python3
 3. Install the `requests` Python package
 4. Install this package - `pip install --editable .` (from the same folder as the `setup.py` file)
