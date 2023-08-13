@@ -1,9 +1,8 @@
 import json
 import os
+import requests
 import traceback
 from datetime import date, datetime
-
-import requests
 
 from mdhhockey.constants import (CACHE_DIR, NHL_API_BASE_URL, PLAYERS_CACHE_SUBDIR)
 
@@ -15,7 +14,7 @@ def calculate_age(dob):
   return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
 
-def _get(url):
+def _get_nhl(url):
   """
     Make API call to NHL API and return results as json. Utilizes a local cache and
     will avoid making duplicate API calls across application executions.

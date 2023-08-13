@@ -2,19 +2,22 @@ import csv
 import json
 import os
 import re
+import requests
 from datetime import datetime
+
 
 from mdhhockey.constants import (
   _K, FANTRAX_EXPORT_FP, INPUTS_DIR, MISSING_PLAYERS, NHL_API_BASE_URL,
-  NUM_YEARS_DATA_TO_FETCH, OUTPUTS_DIR
+  NUM_YEARS_DATA_TO_FETCH, OUTPUTS_DIR, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE
 )
-from mdhhockey.helpers import _get, _pid, _replace_special_chars, calculate_age
+from mdhhockey.helpers import _get_nhl, _pid, _replace_special_chars, calculate_age
 
 
 curr_year = datetime.today().year
 curr_month = datetime.today().year
 if curr_month < 7:
   # Consider pre-July to be in-season still (e.g. May 2022 should start with 21-22, not 22-23)
+  # TODO: We should probably just get this from somewhere in Fantrax. IE when we create the new league CapFriendly will automatically adjust
   curr_year = curr_year - 1
 season_headers = [ f'{curr_year+i}-{curr_year+(i+1)}' for i in range(0, 7) ]
 
@@ -28,7 +31,7 @@ def _get_all_team_players(team_id):
   # Get all roster player IDs, for all players on roster over last n years
   for year in [curr_year - i for i in range(NUM_YEARS_DATA_TO_FETCH)]:
     season_str = f'{year-1}{year}'
-    response = _get(f'{NHL_API_BASE_URL}/teams/{team_id}/roster?season={season_str}')
+    response = _get_nhl(f'{NHL_API_BASE_URL}/teams/{team_id}/roster?season={season_str}')
     if response.get('message', '') == 'Object not found':
       # Expansion team that didn't exist during this season
       break
@@ -37,7 +40,7 @@ def _get_all_team_players(team_id):
   # For each player ID, get their detailed data
   all_player_objs = []
   for player_id in all_player_ids:
-    player_obj = _get(f'{NHL_API_BASE_URL}/people/{player_id}')['people'][0]
+    player_obj = _get_nhl(f'{NHL_API_BASE_URL}/people/{player_id}')['people'][0]
     all_player_objs.append(player_obj)
   return all_player_objs
 
@@ -48,7 +51,7 @@ def _get_drafted_prospects():
   """
   all_player_objs = []
   for year in [curr_year - i for i in range(NUM_YEARS_DATA_TO_FETCH)]:
-    draft_data = _get(f'{NHL_API_BASE_URL}/draft/{year}')['drafts'][0]['rounds']
+    draft_data = _get_nhl(f'{NHL_API_BASE_URL}/draft/{year}')['drafts'][0]['rounds']
     for round in draft_data:
       for p in round['picks']:
         # Retrieve the Prospect object
@@ -56,7 +59,7 @@ def _get_drafted_prospects():
           continue  # This is how the NHL API seems to label "bad data"
 
         prospect_id = p['prospect']['id']
-        prospect = _get(f'{NHL_API_BASE_URL}/draft/prospects/{prospect_id}'
+        prospect = _get_nhl(f'{NHL_API_BASE_URL}/draft/prospects/{prospect_id}'
                         )['prospects'][0]
         if 'nhlPlayerId' not in prospect:
           # Player isn't signed with NHL team yet
@@ -65,7 +68,7 @@ def _get_drafted_prospects():
         else:
           # Retrieve the Player object, given the nhlPlayerId
           prospect_player_id = prospect['nhlPlayerId']
-          player_obj = _get(f'{NHL_API_BASE_URL}/people/{prospect_player_id}'
+          player_obj = _get_nhl(f'{NHL_API_BASE_URL}/people/{prospect_player_id}'
                             )['people'][0]
           player_obj['prospect_data'] = prospect
           all_player_objs.append(player_obj)
@@ -125,7 +128,7 @@ def get_nhl_players_data():
   """
     Get a giant object containing player data from the NHL API
   """
-  teams_data = _get(f'{NHL_API_BASE_URL}/teams')['teams']
+  teams_data = _get_nhl(f'{NHL_API_BASE_URL}/teams')['teams']
   team_abbrevs = {t['name']: t['abbreviation'] for t in teams_data}
   players_map = {}
 
@@ -151,10 +154,18 @@ def get_nhl_players_data():
   return players_map
 
 
-def load_fantrax_data_from_file():
-  player_objs = []
+def download_fantrax_csv():
+  headers = {'Cookie': FANTRAX_LOGIN_COOKIE} 
+  player_data = requests.get(FANTRAX_EXPORT_URL, headers=headers).text
+
   if not os.path.exists(INPUTS_DIR):
     os.mkdir(INPUTS_DIR)  # init directory
+  with open(FANTRAX_EXPORT_FP, 'w') as csvfile:
+    csvfile.write(player_data)
+
+
+def load_fantrax_data_from_file():
+  player_objs = []
   with open(FANTRAX_EXPORT_FP, 'r') as csvfile:
     csvreader = csv.DictReader(csvfile, delimiter=',')
     for row in csvreader:
@@ -215,6 +226,7 @@ def merge_data(fantrax_data, nhl_players_dict):
 def generate_data_for_capfriendly():
 
   # 1. get fantrax CSV
+  download_fantrax_csv()
   fantrax_data = load_fantrax_data_from_file()
 
   # 2. get players/prospects data from NHL api
