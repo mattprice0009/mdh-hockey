@@ -1,7 +1,8 @@
 mdhhockey.egg-info*
 *.DS_Store*
-mdhhockey/config.cfg
 *__pycache__*
+
+mdhhockey/config.cfg
 mdhhockey/inputs
 mdhhockey/outputs
 mdhhockey/response_cache
