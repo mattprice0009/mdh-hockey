@@ -12,7 +12,7 @@ from mdhhockey.constants import (
   _K, INPUTS_DIR, OUTPUTS_DIR, CAPFRIENDLY_GRAPH_URL,
   MISSING_PLAYERS, NHL_API_BASE_URL, NUM_YEARS_DATA_TO_FETCH,
   FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE,
-  AZURE_TOKEN_CACHE, AZURE_CLIENT_ID, AZURE_SCOPE, AZURE_USER
+  AZURE_TOKEN_CACHE, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_USER, AZURE_AUTHORITY
 )
 from mdhhockey.helpers import _get_nhl, _pid, _replace_special_chars, calculate_age
 
@@ -261,15 +261,15 @@ def generate_data_for_capfriendly():
   atexit.register(lambda: 
       open(AZURE_TOKEN_CACHE, "w").write(cache.serialize()) if cache.has_state_changed else None)
 
-  app = msal.PublicClientApplication(AZURE_CLIENT_ID, authority=f"https://login.microsoftonline.com/consumers", token_cache=cache)
+  app = msal.PublicClientApplication(AZURE_CLIENT_ID, authority=AZURE_AUTHORITY, token_cache=cache)
 
   result = None
   accounts = app.get_accounts(username=AZURE_USER)
   if accounts:
-      result = app.acquire_token_silent(AZURE_SCOPE, account=accounts[0])
+      result = app.acquire_token_silent(AZURE_SCOPES, account=accounts[0])
 
   if not result:
-      result = app.acquire_token_interactive(scopes=AZURE_SCOPE)
+      result = app.acquire_token_interactive(scopes=AZURE_SCOPES)
 
   if "access_token" in result:
       graph_data = requests.get(CAPFRIENDLY_GRAPH_URL, headers={"Authorization": f"Bearer {result['access_token']}"}).json()

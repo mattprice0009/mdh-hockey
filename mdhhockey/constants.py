@@ -13,7 +13,8 @@ PLAYERS_CACHE_SUBDIR = 'players'
 
 # Azure/OneDrive variables
 AZURE_CLIENT_ID = config['azure']['client_id']
-AZURE_SCOPE = ['https://graph.microsoft.com/.default']
+AZURE_SCOPES = ['https://graph.microsoft.com/.default']
+AZURE_AUTHORITY = 'https://login.microsoftonline.com/consumers'
 AZURE_TOKEN_CACHE = f'{CACHE_DIR}/cache.bin'
 AZURE_USER = config['azure']['user']
 CAPFRIENDLY_GRAPH_URL = "https://graph.microsoft.com/v1.0/me/drive/root:/Hockey/MDH/MDH-CapFriendly-2023.xlsx:/workbook/worksheets"
