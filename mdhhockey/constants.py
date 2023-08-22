@@ -17,7 +17,7 @@ AZURE_SCOPES = ['https://graph.microsoft.com/.default']
 AZURE_AUTHORITY = 'https://login.microsoftonline.com/consumers'
 AZURE_TOKEN_CACHE = f'{CACHE_DIR}/cache.bin'
 AZURE_USER = config['azure']['user']
-CAPFRIENDLY_GRAPH_URL_ROOT = "https://graph.microsoft.com/v1.0/me/drive/root:/Hockey/MDH/MDH-CapFriendly-2023-backup.xlsx:/workbook/"
+CAPFRIENDLY_GRAPH_URL_ROOT = "https://graph.microsoft.com/v1.0/me/drive/root:/Hockey/MDH/MDH-CapFriendly-backup.xlsx:/workbook/"
 
 # Directory to store the Fantrax input CSV
 INPUTS_DIR = f'{PROJECT_ROOT}/inputs'
@@ -43,7 +43,7 @@ NUM_YEARS_DATA_TO_FETCH = 10
 # is because they are A) undrafted, B) haven't played an NHL game, and C)
 # rostered in Fantrax.
 # TODO: Hardcode their information into here instead of skipping.
-MISSING_PLAYERS = set(['Brandon Bussi', 'Ryan McAllister'])
+MISSING_PLAYERS = set(['Brandon Bussi', 'Ryan McAllister', 'Daniel Vladar'])
 
 class _K:
   BDAY = 'birthDate'

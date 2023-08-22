@@ -118,9 +118,16 @@ def match_fantrax_player_to_nhl_player(row, nhl_players_dict):
     return matches[0]
 
   if name in MISSING_PLAYERS:
-    # TODO: Hardcode their information into here instead of skipping.
-    print(f'Skipping {name} as they are a known missing player...')
-    return
+    if name == "Daniel Vladar":
+      return nhl_players_dict["8478435"]
+    elif name == "Brandon Bussi":
+      bussi = {_K.BDAY: "1998-06-25"}
+      return bussi
+    elif name == "Ryan McAllister":
+      mcallister = {_K.BDAY: "2001-12-19"}
+      return mcallister
+
+    print(f"Missing player override for {name} not found.")
 
   print('NO SINGLE MATCHES!!')
   print(json.dumps(matches, sort_keys=True, indent=2, default=str))
