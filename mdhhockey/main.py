@@ -5,11 +5,12 @@ import msal
 import os
 import re
 import requests
-from datetime import datetime
+from datetime import datetime, date
+from dateutil.relativedelta import relativedelta
 
 
 from mdhhockey.constants import (
-  _K, INPUTS_DIR, OUTPUTS_DIR, CAPFRIENDLY_GRAPH_URL,
+  _K, INPUTS_DIR, OUTPUTS_DIR, CAPFRIENDLY_GRAPH_URL_ROOT,
   MISSING_PLAYERS, NHL_API_BASE_URL, NUM_YEARS_DATA_TO_FETCH,
   FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE,
   AZURE_TOKEN_CACHE, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_USER, AZURE_AUTHORITY
@@ -23,7 +24,7 @@ if curr_month < 7:
   # Consider pre-July to be in-season still (e.g. May 2022 should start with 21-22, not 22-23)
   # TODO: We should probably just get this from somewhere in Fantrax. IE when we create the new league CapFriendly will automatically adjust
   curr_year = curr_year - 1
-season_headers = [ f'{curr_year+i}-{curr_year+(i+1)}' for i in range(0, 7) ]
+season_headers = [ f'{curr_year+i}-{curr_year+(i+1)}' for i in range(0, 8) ]
 
 
 def _get_all_team_players(team_id):
@@ -178,6 +179,24 @@ def load_fantrax_data_from_file():
   return player_objs
 
 
+def calculate_expiry_status(output_obj, num_years):
+  dob = date.fromisoformat(output_obj[_K.DOB])
+
+  exp_year = season_headers[num_years].split("-")[1]
+  exp_date = date.fromisoformat(f"{exp_year}-09-15") # Season rollover date. Also Defined in the Summary!Q10
+
+  difference_in_years = relativedelta(exp_date, dob).years
+
+  extensions = [line.rstrip() for line in open(f"{INPUTS_DIR}/extensions.csv", "r")]
+
+  if "ELC" in output_obj[_K.CONTRACT]:
+    return f"RFA ({difference_in_years}*)"
+  elif output_obj[_K.PLAYER] not in extensions and ((difference_in_years < 26 and output_obj[_K.POSITION] != "G") or (difference_in_years < 28 and output_obj[_K.POSITION] == "G")):
+    return f"RFA ({difference_in_years})"
+  else:
+    return f"UFA ({difference_in_years})"
+
+
 def merge_data(fantrax_data, nhl_players_dict):
   """
     For each player in `fantrax_data`, generate an output object containing
@@ -193,8 +212,8 @@ def merge_data(fantrax_data, nhl_players_dict):
       **{
         # Rename these below few keys
         _K.DOB: matched_nhl_player[_K.BDAY],
-        _K.POSITION: row['Position'],
-        _K.TEAM: row['Status']
+        _K.POSITION: row['Position'].replace(',', '/'),
+        _K.TEAM: row['Status'],
       }
     }
     # Set IR status
@@ -213,6 +232,7 @@ def merge_data(fantrax_data, nhl_players_dict):
     elif output_obj[_K.CONTRACT] == 'Stream':
       num_years_to_set = 1  # Stream is 1 year
     else:
+      output_obj[_K.CONTRACT] = f"'0{output_obj[_K.CONTRACT]}" # Escape for Excel formatting
       # Calculate number of years based off standard contract label (e.g. "07/2027")
       expire_year = output_obj[_K.CONTRACT].split('/')[1]
       for i, header in enumerate(season_headers):
@@ -221,6 +241,8 @@ def merge_data(fantrax_data, nhl_players_dict):
     for i, header in enumerate(season_headers):
       if i < num_years_to_set:
         output_obj[header] = output_obj[_K.AAV]
+      elif i == num_years_to_set:
+        output_obj[header] = calculate_expiry_status(output_obj, num_years_to_set)
       else:
         output_obj[header] = ''
     merged_data.append(output_obj)
@@ -271,9 +293,35 @@ def generate_data_for_capfriendly():
   if not result:
       result = app.acquire_token_interactive(scopes=AZURE_SCOPES)
 
-  if "access_token" in result:
-      graph_data = requests.get(CAPFRIENDLY_GRAPH_URL, headers={"Authorization": f"Bearer {result['access_token']}"}).json()
-      # print(json.dumps(graph_data, indent=4))
+  if 'access_token' in result:
+    # Read the data from our processed CSV into a payload for the POST
+    data = []
+    with open(f'{OUTPUTS_DIR}/processed_data_for_cf.csv', 'r') as csvfile:
+      for line in csvfile.readlines()[1:]: # skip headers
+        line = line.replace('\n', '').split(",")
+        data.append(line)
+
+    # TODO: Add some sanity checks here and bail if necessary
+
+    # Get the range of the existing contracts to delete later
+    resp = requests.get(f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/range', headers={'Authorization': f'Bearer {result["access_token"]}'}).json()
+    addr_to_delete = resp["address"]
+    addr_to_delete = addr_to_delete.replace("A1", "A2")
+    addr_to_delete = addr_to_delete.split("!")[1]
+
+    # TODO: Check to ensure we get a response and a valid address
+
+    # Then add the players from our new object
+    print('Adding to Players table from CSV...')
+    resp = requests.post(f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/rows', json={'values': data, 'index': None}, headers={'Authorization': f'Bearer {result["access_token"]}'})
+
+    # TODO: Add a check to ensure this worked and bail or try again if not
+
+    # Finally delete all the previous rows
+    print('Deleting existing Players table...')
+    resp = requests.post(f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/range(address='{addr_to_delete}')/delete", json={'shift': 'Up'}, headers={'Authorization': f'Bearer {result["access_token"]}'})
+
+    # TODO: Add a check to ensure this was successful and try again if not
 
 
 if __name__ == '__main__':
