@@ -2,7 +2,7 @@ import configparser
 
 # Config File (for vars that shouldn't be uploaded to GitHub)
 config = configparser.ConfigParser()
-config.read(['config.cfg'])
+config.read(['/home/jeremy/mdh-hockey/mdhhockey/config.cfg'])
 
 # Root of the project to ensure absolute paths
 PROJECT_ROOT = config['project']['root']
@@ -42,7 +42,6 @@ NUM_YEARS_DATA_TO_FETCH = 10
 # These players are not on ANY draft results or teams page. I believe this
 # is because they are A) undrafted, B) haven't played an NHL game, and C)
 # rostered in Fantrax.
-# TODO: Hardcode their information into here instead of skipping.
 MISSING_PLAYERS = set(['Brandon Bussi', 'Ryan McAllister', 'Daniel Vladar'])
 
 class _K:
