@@ -17,7 +17,7 @@ AZURE_SCOPES = ['https://graph.microsoft.com/.default']
 AZURE_AUTHORITY = 'https://login.microsoftonline.com/consumers'
 AZURE_TOKEN_CACHE = f'{CACHE_DIR}/cache.bin'
 AZURE_USER = config['azure']['user']
-CAPFRIENDLY_GRAPH_URL_ROOT = "https://graph.microsoft.com/v1.0/me/drive/root:/Hockey/MDH/MDH-CapFriendly-backup.xlsx:/workbook/"
+CAPFRIENDLY_GRAPH_URL_ROOT = "https://graph.microsoft.com/v1.0/me/drive/root:/Hockey/MDH/MDH-CapFriendly.xlsx:/workbook/"
 
 # Directory to store the Fantrax input CSV
 INPUTS_DIR = f'{PROJECT_ROOT}/inputs'
