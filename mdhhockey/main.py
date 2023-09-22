@@ -309,6 +309,8 @@ def generate_data_for_capfriendly():
         data.append(line)
 
     # TODO: Add some sanity checks here and bail if necessary
+    if len(data) == 0:
+        print('Failed to get any data from Fantrax. Aborting.')
 
     # Get the range of the existing contracts to delete later
     resp = requests.get(f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/range', headers={'Authorization': f'Bearer {result["access_token"]}'}).json()
