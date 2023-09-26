@@ -126,6 +126,8 @@ def match_fantrax_player_to_nhl_player(row, nhl_players_dict):
     elif name == "Ryan McAllister":
       mcallister = {_K.BDAY: "2001-12-19"}
       return mcallister
+    elif name == 'Georgi Merkulov':
+      return {_K.BDAY: '2000-10-10'}
 
     print(f"Missing player override for {name} not found.")
 

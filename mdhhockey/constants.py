@@ -42,7 +42,7 @@ NUM_YEARS_DATA_TO_FETCH = 10
 # These players are not on ANY draft results or teams page. I believe this
 # is because they are A) undrafted, B) haven't played an NHL game, and C)
 # rostered in Fantrax.
-MISSING_PLAYERS = set(['Brandon Bussi', 'Ryan McAllister', 'Daniel Vladar'])
+MISSING_PLAYERS = set(['Brandon Bussi', 'Ryan McAllister', 'Daniel Vladar', 'Georgi Merkulov'])
 
 class _K:
   BDAY = 'birthDate'
