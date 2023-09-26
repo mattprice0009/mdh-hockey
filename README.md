@@ -20,6 +20,7 @@ The output CSV is formatted to perfectly match the format & columns of the "All 
 ### Running
 
 **NOTE: Running this will store many (at least a few thousand) JSON files in the directory defined in `CACHE_DIR`. Ensure you're OK with storing a couple dozen MB in local files before running.**
+**NOTE: It also may take 10 or 15 minutes to run**
 
 To run the script, simply run `python main.py`.
 
