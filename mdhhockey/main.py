@@ -1,21 +1,20 @@
 import atexit
 import csv
 import json
-import msal
 import os
 import re
+from datetime import date, datetime
+
+import msal
 import requests
-from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 
-
 from mdhhockey.constants import (
-  _K, INPUTS_DIR, OUTPUTS_DIR, CAPFRIENDLY_GRAPH_URL_ROOT,
-  MISSING_PLAYERS, NHL_API_BASE_URL, NUM_YEARS_DATA_TO_FETCH,
-  FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE,
-  AZURE_TOKEN_CACHE, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_USER, AZURE_AUTHORITY
+  _K, AZURE_AUTHORITY, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_TOKEN_CACHE, AZURE_USER,
+  CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE,
+  INPUTS_DIR, MISSING_PLAYERS, NHL_API_BASE_URL, NUM_YEARS_DATA_TO_FETCH, OUTPUTS_DIR
 )
-from mdhhockey.helpers import _get_nhl, _pid, _replace_special_chars, calculate_age
+from mdhhockey.helpers import (_get_nhl, _pid, _replace_special_chars, calculate_age)
 
 
 curr_year = datetime.today().year
@@ -65,7 +64,7 @@ def _get_drafted_prospects():
 
         prospect_id = p['prospect']['id']
         prospect = _get_nhl(f'{NHL_API_BASE_URL}/draft/prospects/{prospect_id}'
-                        )['prospects'][0]
+                            )['prospects'][0]
         if 'nhlPlayerId' not in prospect:
           # Player isn't signed with NHL team yet
           prospect['id'] = 'prospect' + _pid(prospect['id'])
@@ -74,7 +73,7 @@ def _get_drafted_prospects():
           # Retrieve the Player object, given the nhlPlayerId
           prospect_player_id = prospect['nhlPlayerId']
           player_obj = _get_nhl(f'{NHL_API_BASE_URL}/people/{prospect_player_id}'
-                            )['people'][0]
+                                )['people'][0]
           player_obj['prospect_data'] = prospect
           all_player_objs.append(player_obj)
   return all_player_objs
@@ -169,7 +168,7 @@ def get_nhl_players_data():
 
 
 def download_fantrax_csv():
-  headers = {'Cookie': FANTRAX_LOGIN_COOKIE} 
+  headers = { 'Cookie': FANTRAX_LOGIN_COOKIE}
   player_data = requests.get(FANTRAX_EXPORT_URL, headers=headers).text
 
   if not os.path.exists(INPUTS_DIR):
@@ -192,7 +191,9 @@ def calculate_expiry_status(output_obj, num_years):
   dob = date.fromisoformat(output_obj[_K.DOB])
 
   exp_year = season_headers[num_years].split("-")[1]
-  exp_date = date.fromisoformat(f"{exp_year}-09-15") # Season rollover date. Also Defined in the Summary!Q10
+  exp_date = date.fromisoformat(
+    f"{exp_year}-09-15"
+  )  # Season rollover date. Also Defined in the Summary!Q10
 
   difference_in_years = relativedelta(exp_date, dob).years
 
@@ -200,7 +201,9 @@ def calculate_expiry_status(output_obj, num_years):
 
   if "ELC" in output_obj[_K.CONTRACT]:
     return f"RFA ({difference_in_years}*)"
-  elif output_obj[_K.PLAYER] not in extensions and ((difference_in_years < 26 and output_obj[_K.POSITION] != "G") or (difference_in_years < 28 and output_obj[_K.POSITION] == "G")):
+  elif output_obj[_K.PLAYER] not in extensions and (
+    (difference_in_years < 26 and output_obj[_K.POSITION] != "G") or
+    (difference_in_years < 28 and output_obj[_K.POSITION] == "G")):
     return f"RFA ({difference_in_years})"
   else:
     return f"UFA ({difference_in_years})"
@@ -241,7 +244,8 @@ def merge_data(fantrax_data, nhl_players_dict):
     elif output_obj[_K.CONTRACT] == 'Stream':
       num_years_to_set = 1  # Stream is 1 year
     else:
-      output_obj[_K.CONTRACT] = f"'0{output_obj[_K.CONTRACT]}" # Escape for Excel formatting
+      output_obj[_K.CONTRACT
+                 ] = f"'0{output_obj[_K.CONTRACT]}"  # Escape for Excel formatting
       # Calculate number of years based off standard contract label (e.g. "07/2027")
       expire_year = output_obj[_K.CONTRACT].split('/')[1]
       for i, header in enumerate(season_headers):
@@ -287,35 +291,44 @@ def generate_data_for_capfriendly():
   # TODO: This could stand to be cleaned up a bit too.
   cache = msal.SerializableTokenCache()
   if os.path.exists(AZURE_TOKEN_CACHE):
-      cache.deserialize(open(AZURE_TOKEN_CACHE, "r").read())
+    cache.deserialize(open(AZURE_TOKEN_CACHE, "r").read())
 
-  atexit.register(lambda: 
-      open(AZURE_TOKEN_CACHE, "w").write(cache.serialize()) if cache.has_state_changed else None)
+  atexit.register(
+    lambda: open(AZURE_TOKEN_CACHE, "w").write(cache.serialize())
+    if cache.has_state_changed else None
+  )
 
-  app = msal.PublicClientApplication(AZURE_CLIENT_ID, authority=AZURE_AUTHORITY, token_cache=cache)
+  app = msal.PublicClientApplication(
+    AZURE_CLIENT_ID, authority=AZURE_AUTHORITY, token_cache=cache
+  )
 
   result = None
   accounts = app.get_accounts(username=AZURE_USER)
   if accounts:
-      result = app.acquire_token_silent(AZURE_SCOPES, account=accounts[0])
+    result = app.acquire_token_silent(AZURE_SCOPES, account=accounts[0])
 
   if not result:
-      result = app.acquire_token_interactive(scopes=AZURE_SCOPES)
+    result = app.acquire_token_interactive(scopes=AZURE_SCOPES)
 
   if 'access_token' in result:
     # Read the data from our processed CSV into a payload for the POST
     data = []
     with open(f'{OUTPUTS_DIR}/processed_data_for_cf.csv', 'r') as csvfile:
-      for line in csvfile.readlines()[1:]: # skip headers
+      for line in csvfile.readlines()[1:]:  # skip headers
         line = line.replace('\n', '').split(",")
         data.append(line)
 
     # TODO: Add some sanity checks here and bail if necessary
     if len(data) == 0:
-        print('Failed to get any data from Fantrax. Aborting.')
+      print('Failed to get any data from Fantrax. Aborting.')
 
     # Get the range of the existing contracts to delete later
-    resp = requests.get(f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/range', headers={'Authorization': f'Bearer {result["access_token"]}'}).json()
+    resp = requests.get(
+      f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/range',
+      headers={
+        'Authorization': f'Bearer {result["access_token"]}'
+      }
+    ).json()
     addr_to_delete = resp["address"]
     addr_to_delete = addr_to_delete.replace("A1", "A2")
     addr_to_delete = addr_to_delete.split("!")[1]
@@ -324,13 +337,24 @@ def generate_data_for_capfriendly():
 
     # Then add the players from our new object
     print('Adding to Players table from CSV...')
-    resp = requests.post(f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/rows', json={'values': data, 'index': None}, headers={'Authorization': f'Bearer {result["access_token"]}'})
+    resp = requests.post(
+      f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/rows',
+      json={
+        'values': data,
+        'index': None
+      },
+      headers={ 'Authorization': f'Bearer {result["access_token"]}'}
+    )
 
     # TODO: Add a check to ensure this worked and bail or try again if not
 
     # Finally delete all the previous rows
     print('Deleting existing Players table...')
-    resp = requests.post(f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/range(address='{addr_to_delete}')/delete", json={'shift': 'Up'}, headers={'Authorization': f'Bearer {result["access_token"]}'})
+    resp = requests.post(
+      f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/range(address='{addr_to_delete}')/delete",
+      json={ 'shift': 'Up'},
+      headers={ 'Authorization': f'Bearer {result["access_token"]}'}
+    )
 
     # TODO: Add a check to ensure this was successful and try again if not
 
