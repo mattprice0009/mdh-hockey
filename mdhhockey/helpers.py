@@ -1,8 +1,9 @@
 import json
 import os
-import requests
 import traceback
 from datetime import date, datetime
+
+import requests
 
 from mdhhockey.constants import (CACHE_DIR, NHL_API_BASE_URL, PLAYERS_CACHE_SUBDIR)
 
