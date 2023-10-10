@@ -128,13 +128,12 @@ def match_fantrax_player_to_nhl_player(row, nhl_players_dict):
     elif name == 'Georgi Merkulov':
       return {_K.BDAY: '2000-10-10'}
 
-    print(f"Missing player override for {name} not found.")
+    print(f'Missing player override for {name} not found.')
 
   print('NO SINGLE MATCHES!!')
   print(json.dumps(matches, sort_keys=True, indent=2, default=str))
   print(json.dumps(row, sort_keys=True, indent=2, default=str))
-  print('Execution paused. Press enter to continue...')
-  input()
+  print(f'Continuing without {name}')
 
 
 def get_nhl_players_data():
