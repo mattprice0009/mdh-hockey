@@ -43,7 +43,7 @@ NUM_YEARS_DATA_TO_FETCH = 10
 # is because they are A) undrafted, B) haven't played an NHL game, and C)
 # rostered in Fantrax.
 MISSING_PLAYERS = set([
-  'Brandon Bussi', 'Ryan McAllister', 'Daniel Vladar', 'Georgi Merkulov', 'Waltteri Merela'
+  'Brandon Bussi', 'Ryan McAllister', 'Daniel Vladar', 'Georgi Merkulov', 'Waltteri Merela', 'Zachary Jones'
 ])
 
 

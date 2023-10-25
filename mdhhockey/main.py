@@ -129,6 +129,8 @@ def match_fantrax_player_to_nhl_player(row, nhl_players_dict):
       return {_K.BDAY: '2000-10-10'}
     elif name == "Waltteri Merela":
       return {_K.BDAY: '1998-07-06'}
+    elif name == 'Zachary Jones':
+      return {_K.BDAY: '2000-10-18'}
 
     print(f'Missing player override for {name} not found.')
 
