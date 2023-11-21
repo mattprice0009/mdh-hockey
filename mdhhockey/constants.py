@@ -34,7 +34,9 @@ FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
 OUTPUTS_DIR = f'{PROJECT_ROOT}/outputs'
 
 # NHL API documentation: https://gitlab.com/dword4/nhlapi/-/blob/master/stats-api.md
-NHL_API_BASE_URL = 'https://statsapi.web.nhl.com/api/v1'
+# Some of the new nhle API documentation is best found in the Issues discussions
+NHL_API_BASE_URL = 'https://api-web.nhle.com/v1/'
+NHL_API_SEARCH_URL = 'https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=500&q='
 
 # Number of years to retrieve draft results + team rosters history for.
 NUM_YEARS_DATA_TO_FETCH = 10
