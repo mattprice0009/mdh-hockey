@@ -270,10 +270,8 @@ def generate_data_for_capfriendly():
   if len(merged_data) == 0:
     print('Failed to get any data from Fantrax. Aborting.')
 
-  data = []
   headers = [_K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT] + season_headers
-  for player in merged_data:
-    data.append(list(dict(filter(lambda item: item[0] in headers, player.items())).values()))
+  data = list(list(player[k] for k in headers) for player in merged_data)
 
   # 4. Update the CapFriendly on OneDrive.
   result = _acquire_azure_token()
