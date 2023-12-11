@@ -10,11 +10,10 @@ import requests
 from dateutil.relativedelta import relativedelta
 
 from mdhhockey.constants import (
-  _K, AZURE_AUTHORITY, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_TOKEN_CACHE, AZURE_USER,
+  _K, AZURE_AUTHORITY, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_TOKEN_CACHE, AZURE_USER, CACHE_DIR,
   CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE,
-  INPUTS_DIR, MISSING_PLAYERS, NHL_API_BASE_URL, NUM_YEARS_DATA_TO_FETCH, OUTPUTS_DIR
+  INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL, OUTPUTS_DIR
 )
-from mdhhockey.helpers import (_get_nhl, _pid, _replace_special_chars, calculate_age)
 
 
 curr_year = datetime.today().year
@@ -26,148 +25,84 @@ if curr_month < 7:
 season_headers = [ f'{curr_year+i}-{curr_year+(i+1)}' for i in range(0, 8) ]
 
 
-def _get_all_team_players(team_id):
+def _replace_special_chars(name):
   """
-    Get all roster players over the past N years, for a given team.
+    Replaces special unicode characters with English alternatives (e.g. replacing
+    the accented u with an English "u").
   """
-  all_player_ids = set()
-
-  # Get all roster player IDs, for all players on roster over last n years
-  for year in [curr_year - i for i in range(NUM_YEARS_DATA_TO_FETCH)]:
-    season_str = f'{year-1}{year}'
-    response = _get_nhl(f'{NHL_API_BASE_URL}/teams/{team_id}/roster?season={season_str}')
-    if response.get('message', '') == 'Object not found':
-      # Expansion team that didn't exist during this season
-      break
-    all_player_ids.update([p['person']['id'] for p in response['roster']])
-
-  # For each player ID, get their detailed data
-  all_player_objs = []
-  for player_id in all_player_ids:
-    player_obj = _get_nhl(f'{NHL_API_BASE_URL}/people/{player_id}')['people'][0]
-    all_player_objs.append(player_obj)
-  return all_player_objs
+  replacements = [('\u00fc', 'u'), ('\u00e8', 'e')]
+  for r in replacements:
+    name = name.replace(r[0], r[1])
+  return name
 
 
-def _get_drafted_prospects():
-  """
-    Get players data directly from draft results, by draft year.
-  """
-  all_player_objs = []
-  for year in [curr_year - i for i in range(NUM_YEARS_DATA_TO_FETCH)]:
-    draft_data = _get_nhl(f'{NHL_API_BASE_URL}/draft/{year}')['drafts'][0]['rounds']
-    for round in draft_data:
-      for p in round['picks']:
-        # Retrieve the Prospect object
-        if p['prospect'][_K.NAME_FULL] == 'Void':
-          continue  # This is how the NHL API seems to label "bad data"
-
-        prospect_id = p['prospect']['id']
-        prospect = _get_nhl(f'{NHL_API_BASE_URL}/draft/prospects/{prospect_id}'
-                            )['prospects'][0]
-        if 'nhlPlayerId' not in prospect:
-          # Player isn't signed with NHL team yet
-          prospect['id'] = 'prospect' + _pid(prospect['id'])
-          all_player_objs.append({ **prospect, **{_K.CURR_TEAM: p['team']} })
-        else:
-          # Retrieve the Player object, given the nhlPlayerId
-          prospect_player_id = prospect['nhlPlayerId']
-          player_obj = _get_nhl(f'{NHL_API_BASE_URL}/people/{prospect_player_id}'
-                                )['people'][0]
-          player_obj['prospect_data'] = prospect
-          all_player_objs.append(player_obj)
-  return all_player_objs
-
-
-def match_fantrax_player_to_nhl_player(row, nhl_players_dict):
+def match_fantrax_player_to_nhl_player(row):
   """
     Attempt to match the Fantrax player (`row`) to 1 (and only 1) player object
     from the NHL API.
   """
-  name = row[_K.PLAYER].strip()
-  last_name = ' '.join(name.split()[1:])  # handle last names that are multiple words
-  curr_age = int(row[_K.AGE])
-  team = row[_K.TEAM].strip()
+  ft_name = row[_K.PLAYER].strip()
+  ft_last_name = ' '.join(ft_name.split()[1:])  # handle last names that are multiple words
+  ft_team = row[_K.TEAM].strip()
 
-  # Apply arbitrary matching logic that will match (in order of pref):
-  # 1. Full name + age + team
-  # 2. Full name + age
-  # 3. Full name + team
-  # 4. Last name + age + team
-  # 5. Last name + age
+  search = requests.get(f"{NHL_API_SEARCH_URL}{ft_name}").json()
+  if len(search) == 0:
+    print(f"Search for {ft_name} returned empty list.")
+    return "0"
+
   matches = []
-  for item in nhl_players_dict.values():
-    item_matches = []
-    if item[_K.NAME_FULL].strip() == name:
-      item_matches.append({ **item, **{ '_score': 1.0} })
-    elif _K.NAME_LAST in item and item[_K.NAME_LAST].strip() == last_name:
-      item_matches.append({ **item, **{ '_score': 0.4} })
-    for m in item_matches:
-      if m.get(_K.CURR_AGE, 0) == curr_age:
-        m['_score'] += 0.3
-      if m.get('team_abbrev', '') == team:
-        m['_score'] += 0.2
-      if m['_score'] >= 0.7:
-        matches.append(m)
+  for player in search:
+    nhl_name = _replace_special_chars(player[_K.NAME])
+    nhl_last_name = ' '.join(nhl_name.split()[1:])
+    nhl_team = player[_K.TEAM_ABBREV]
+    if nhl_team == None:
+      nhl_team = "(N/A)"
 
-  matches = sorted(matches, key=lambda x: x['_score'], reverse=True)
+    # TODO: These are the names that this missed and why
+    # Elias Pettersson -- Two Elias Pettersons who play for the same team
+    # Calen Addison -- Recently traded from MIN to SJ
+    # Matthew Savoie -- Is Matt Savoie in NHL.com
+    # Will Smith -- Is William Smith in NHL.com
+    # Daniil But -- Is Danil But in NHL.com
+    # Casey DeSmith -- Incorrect team
+    # Nikita Okhotyuk -- Is Nikita Okhotiuk in NHL.com
+    # Ivan Prosvetov -- Team not updated from offseason trade
+    # Anthony Beauvilier -- Team not updated from in-season trade
+
+    confidence = 0.0
+
+    # If the full name and the team matches, we're highly confident
+    if nhl_name == ft_name and nhl_team == ft_team:
+      confidence = 1.0
+
+    # If the full name is right, we're pretty confident even if the team is wrong
+    # NHL.com seems to take some time to update the backend after trades
+    elif nhl_name == ft_name:
+      confidence = 0.7
+
+    # If last name and the team match, we're partially confident
+    elif nhl_last_name == ft_last_name and nhl_team == ft_team:
+      confidence = 0.5
+
+    # If just the last name matches, we're least confident
+    elif nhl_last_name == ft_last_name:
+      confidence = 0.3
+
+    matches.append((player, confidence))
+
+  # If we only have one match, return it
   if len(matches) == 1:
-    return matches[0]
-  if len(matches) > 1 and matches[0]['_score'] > matches[1]['_score']:
-    return matches[0]
+    return matches[0][0]
+  
+  # Or if we have one match greater than the others
+  matches = sorted(matches, key=lambda x: x[1], reverse=True)
+  if len(matches) > 1 and matches[0][1] > matches[1][1]:
+    return matches[0][0]
 
-  if name in MISSING_PLAYERS:
-    if name == "Daniel Vladar":
-      return nhl_players_dict["8478435"]
-    elif name == "Brandon Bussi":
-      bussi = {_K.BDAY: "1998-06-25"}
-      return bussi
-    elif name == "Ryan McAllister":
-      mcallister = {_K.BDAY: "2001-12-19"}
-      return mcallister
-    elif name == 'Georgi Merkulov':
-      return {_K.BDAY: '2000-10-10'}
-    elif name == "Waltteri Merela":
-      return {_K.BDAY: '1998-07-06'}
-    elif name == 'Zachary Jones':
-      return {_K.BDAY: '2000-10-18'}
+  # If we get here, we need help disambiguating
+  print(f"Trouble finding matches for {ft_name}.")
 
-    print(f'Missing player override for {name} not found.')
-
-  print('NO SINGLE MATCHES!!')
-  print(json.dumps(matches, sort_keys=True, indent=2, default=str))
-  print(json.dumps(row, sort_keys=True, indent=2, default=str))
-  print(f'Continuing without {name}')
-
-
-def get_nhl_players_data():
-  """
-    Get a giant object containing player data from the NHL API
-  """
-  teams_data = _get_nhl(f'{NHL_API_BASE_URL}/teams')['teams']
-  team_abbrevs = {t['name']: t['abbreviation'] for t in teams_data}
-  players_map = {}
-
-  # Get roster players for each team
-  for team_obj in teams_data:
-    team_players = _get_all_team_players(team_obj['id'])
-    for player_obj in team_players:
-      players_map[_pid(player_obj['id'])] = player_obj
-
-  # Get all draftees
-  prospect_players = _get_drafted_prospects()
-  for player_obj in prospect_players:
-    players_map[_pid(player_obj['id'])] = player_obj
-
-  for k, player_obj in players_map.items():
-    if _K.CURR_TEAM in player_obj:
-      player_obj['team_abbrev'] = team_abbrevs[player_obj[_K.CURR_TEAM]['name']]
-    if _K.CURR_AGE not in player_obj and _K.BDAY in player_obj:
-      player_obj[_K.CURR_AGE] = calculate_age(player_obj[_K.BDAY])
-    # Replace special characters (unicode characters)
-    player_obj[_K.NAME_FULL] = _replace_special_chars(player_obj[_K.NAME_FULL])
-    player_obj[_K.NAME_LAST] = _replace_special_chars(player_obj[_K.NAME_LAST])
-  return players_map
+  return None
 
 
 def download_fantrax_csv():
@@ -212,25 +147,27 @@ def calculate_expiry_status(output_obj, num_years):
     return f"UFA ({difference_in_years})"
 
 
-def merge_data(fantrax_data, nhl_players_dict):
+def merge_data(fantrax_data, fantrax_to_nhl):
   """
     For each player in `fantrax_data`, generate an output object containing
     supplemental data from the NHL players' data.
   """
   merged_data = []
   for row in fantrax_data:
-    matched_nhl_player = match_fantrax_player_to_nhl_player(row, nhl_players_dict)
-    if not matched_nhl_player:
+    ft_id = row["ID"]
+    if ft_id not in fantrax_to_nhl:
       continue
+
     output_obj = {
       **row,
       **{
         # Rename these below few keys
-        _K.DOB: matched_nhl_player[_K.BDAY],
+        _K.DOB: fantrax_to_nhl[ft_id]["DOB"],
         _K.POSITION: row['Position'].replace(',', '/'),
         _K.TEAM: row['Status'],
       }
     }
+  
     # Set IR status
     if output_obj['Roster Status'] == 'Inj Res':
       output_obj[_K.IR] = 'Y'
@@ -265,33 +202,27 @@ def merge_data(fantrax_data, nhl_players_dict):
   return merged_data
 
 
-def generate_data_for_capfriendly():
+def _load_ids_file():
+  try:
+    with open(f"{CACHE_DIR}/player_ids.json", "r") as f:
+      try:
+        return json.load(f)
+      except:
+        return {}
+  except:
+    print("Cache datafile not found")
+    return {}
 
-  # 1. get fantrax CSV
-  download_fantrax_csv()
-  fantrax_data = load_fantrax_data_from_file()
 
-  # 2. get players/prospects data from NHL api
-  nhl_players_dict = get_nhl_players_data()
+def _write_updated_ids_file(ids):
+  try:
+    with open(f"{CACHE_DIR}/player_ids.json", "w") as f:
+      json.dump(ids, f)
+  except:
+    print("Cache datafile not found")
 
-  # 3. merge together
-  merged_data = merge_data(fantrax_data, nhl_players_dict)
 
-  # 4. write to csv export
-  if not os.path.exists(OUTPUTS_DIR):
-    os.mkdir(OUTPUTS_DIR)  # init directory
-  with open(f'{OUTPUTS_DIR}/processed_data_for_cf.csv', 'w') as csvfile:
-    headers = [
-      _K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT
-    ] + season_headers
-    writer = csv.DictWriter(csvfile, fieldnames=headers, extrasaction='ignore')
-    writer.writeheader()
-    for player_obj in merged_data:
-      writer.writerow(player_obj)
-
-  # 5. Test access to the CapFriendly on OneDrive.
-  # TODO: Put the output in here instead of the output CSV
-  # TODO: This could stand to be cleaned up a bit too.
+def _acquire_azure_token():
   cache = msal.SerializableTokenCache()
   if os.path.exists(AZURE_TOKEN_CACHE):
     cache.deserialize(open(AZURE_TOKEN_CACHE, "r").read())
@@ -313,18 +244,38 @@ def generate_data_for_capfriendly():
   if not result:
     result = app.acquire_token_interactive(scopes=AZURE_SCOPES)
 
+  return result
+
+
+def generate_data_for_capfriendly():
+  # 1. get fantrax CSV
+  download_fantrax_csv()
+  fantrax_data = load_fantrax_data_from_file()
+
+  # 2. Step through each Fantrax player and match them to their NHL.com ID, which is cached
+  fantrax_id_to_nhl_id = _load_ids_file()
+  for row in fantrax_data:
+    fantrax_id = row[_K.ID]
+    if fantrax_id not in fantrax_id_to_nhl_id:
+      matched_player = match_fantrax_player_to_nhl_player(row)
+      if matched_player:
+        dob = requests.get(f"{NHL_API_BASE_URL}player/{matched_player[_K.PLAYER_ID]}/landing").json()["birthDate"]
+        print(f"FOUND: {row[_K.PLAYER]} {matched_player[_K.NAME]} {dob}")
+        fantrax_id_to_nhl_id[fantrax_id] = { "nhl_id" : matched_player[_K.PLAYER_ID], "name" : row[_K.PLAYER], "DOB" : dob }
+
+  _write_updated_ids_file(fantrax_id_to_nhl_id)
+
+  # 3. merge together
+  merged_data = merge_data(fantrax_data, fantrax_id_to_nhl_id)
+  if len(merged_data) == 0:
+    print('Failed to get any data from Fantrax. Aborting.')
+
+  headers = [_K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT] + season_headers
+  data = list(list(player[k] for k in headers) for player in merged_data)
+
+  # 4. Update the CapFriendly on OneDrive.
+  result = _acquire_azure_token()
   if 'access_token' in result:
-    # Read the data from our processed CSV into a payload for the POST
-    data = []
-    with open(f'{OUTPUTS_DIR}/processed_data_for_cf.csv', 'r') as csvfile:
-      for line in csvfile.readlines()[1:]:  # skip headers
-        line = line.replace('\n', '').split(",")
-        data.append(line)
-
-    # TODO: Add some sanity checks here and bail if necessary
-    if len(data) == 0:
-      print('Failed to get any data from Fantrax. Aborting.')
-
     # Get the range of the existing contracts to delete later
     resp = requests.get(
       f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/range',
@@ -332,7 +283,7 @@ def generate_data_for_capfriendly():
         'Authorization': f'Bearer {result["access_token"]}'
       }
     ).json()
-    addr_to_delete = resp["address"]
+    addr_to_delete = resp['address']
     addr_to_delete = addr_to_delete.replace("A1", "A2")
     addr_to_delete = addr_to_delete.split("!")[1]
 

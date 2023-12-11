@@ -9,7 +9,6 @@ PROJECT_ROOT = config['project']['root']
 
 # Directories to cache GET requests in
 CACHE_DIR = f'{PROJECT_ROOT}/response_cache'
-PLAYERS_CACHE_SUBDIR = 'players'
 
 # Azure/OneDrive variables
 AZURE_CLIENT_ID = config['azure']['client_id']
@@ -34,30 +33,25 @@ FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
 OUTPUTS_DIR = f'{PROJECT_ROOT}/outputs'
 
 # NHL API documentation: https://gitlab.com/dword4/nhlapi/-/blob/master/stats-api.md
-NHL_API_BASE_URL = 'https://statsapi.web.nhl.com/api/v1'
-
-# Number of years to retrieve draft results + team rosters history for.
-NUM_YEARS_DATA_TO_FETCH = 10
-
-# These players are not on ANY draft results or teams page. I believe this
-# is because they are A) undrafted, B) haven't played an NHL game, and C)
-# rostered in Fantrax.
-MISSING_PLAYERS = set([
-  'Brandon Bussi', 'Ryan McAllister', 'Daniel Vladar', 'Georgi Merkulov', 'Waltteri Merela', 'Zachary Jones'
-])
-
+# Some of the new nhle API documentation is best found in the Issues discussions
+NHL_API_BASE_URL = 'https://api-web.nhle.com/v1/'
+NHL_API_SEARCH_URL = 'https://search.d3.nhle.com/api/v1/search/player?culture=en-us&limit=500&q='
 
 class _K:
   BDAY = 'birthDate'
   CURR_AGE = 'currentAge'
   CURR_TEAM = 'currentTeam'
+  NAME = 'name'
   NAME_FULL = 'fullName'
   NAME_LAST = 'lastName'
+  PLAYER_ID = 'playerId'
+  TEAM_ABBREV = 'teamAbbrev'
 
   AAV = 'Salary'
   AGE = 'Age'
   CONTRACT = 'Contract'
   DOB = 'DOB'
+  ID = 'ID'
   IR = 'IR?'
   PLAYER = 'Player'
   POSITION = 'Pos'
