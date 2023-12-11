@@ -12,9 +12,8 @@ from dateutil.relativedelta import relativedelta
 from mdhhockey.constants import (
   _K, AZURE_AUTHORITY, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_TOKEN_CACHE, AZURE_USER, CACHE_DIR,
   CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE,
-  INPUTS_DIR, MISSING_PLAYERS, NHL_API_BASE_URL, NHL_API_SEARCH_URL, NUM_YEARS_DATA_TO_FETCH, OUTPUTS_DIR
+  INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL, OUTPUTS_DIR
 )
-from mdhhockey.helpers import (_replace_special_chars, calculate_age)
 
 
 curr_year = datetime.today().year
@@ -24,6 +23,17 @@ if curr_month < 7:
   # TODO: We should probably just get this from somewhere in Fantrax. IE when we create the new league CapFriendly will automatically adjust
   curr_year = curr_year - 1
 season_headers = [ f'{curr_year+i}-{curr_year+(i+1)}' for i in range(0, 8) ]
+
+
+def _replace_special_chars(name):
+  """
+    Replaces special unicode characters with English alternatives (e.g. replacing
+    the accented u with an English "u").
+  """
+  replacements = [('\u00fc', 'u'), ('\u00e8', 'e')]
+  for r in replacements:
+    name = name.replace(r[0], r[1])
+  return name
 
 
 def match_fantrax_player_to_nhl_player(row):
@@ -37,50 +47,59 @@ def match_fantrax_player_to_nhl_player(row):
 
   search = requests.get(f"{NHL_API_SEARCH_URL}{ft_name}").json()
   if len(search) == 0:
-    print(f"Search for {name} returned empty list.")
+    print(f"Search for {ft_name} returned empty list.")
     return "0"
 
   matches = []
   for player in search:
-    nhl_name = _replace_special_chars(player["name"])
+    nhl_name = _replace_special_chars(player[_K.NAME])
     nhl_last_name = ' '.join(nhl_name.split()[1:])
-    nhl_team = player["teamAbbrev"]
+    nhl_team = player[_K.TEAM_ABBREV]
     if nhl_team == None:
       nhl_team = "(N/A)"
 
-    # TODO: NHL.com seems slow to update teams on their backend
-    # Skip any player where the NHL team doesn't match
-    if nhl_team != ft_team:
-      continue
+    # TODO: These are the names that this missed and why
+    # Elias Pettersson -- Two Elias Pettersons who play for the same team
+    # Calen Addison -- Recently traded from MIN to SJ
+    # Matthew Savoie -- Is Matt Savoie in NHL.com
+    # Will Smith -- Is William Smith in NHL.com
+    # Daniil But -- Is Danil But in NHL.com
+    # Casey DeSmith -- Incorrect team
+    # Nikita Okhotyuk -- Is Nikita Okhotiuk in NHL.com
+    # Ivan Prosvetov -- Team not updated from offseason trade
+    # Anthony Beauvilier -- Team not updated from in-season trade
 
-    # If the full name matches, we're highly confident
-    if nhl_name == ft_name:
-      matches.append((player, "1.0"))
+    confidence = 0.0
 
-    # If just the last name matches, we're partially confident
+    # If the full name and the team matches, we're highly confident
+    if nhl_name == ft_name and nhl_team == ft_team:
+      confidence = 1.0
+
+    # If the full name is right, we're pretty confident even if the team is wrong
+    # NHL.com seems to take some time to update the backend after trades
+    elif nhl_name == ft_name:
+      confidence = 0.7
+
+    # If last name and the team match, we're partially confident
+    elif nhl_last_name == ft_last_name and nhl_team == ft_team:
+      confidence = 0.5
+
+    # If just the last name matches, we're least confident
     elif nhl_last_name == ft_last_name:
-      matches.append((player, ".3"))
+      confidence = 0.3
+
+    matches.append((player, confidence))
 
   # If we only have one match, return it
   if len(matches) == 1:
     return matches[0][0]
-
-  # TODO: These are the names that this missed and why
-  # Elias Pettersson -- Two Elias Pettersons who play for the same team
-  # Calen Addison -- Recently traded from MIN to SJ
-  # Matthew Savoie -- Is Matt Savoie in NHL.com
-  # Will Smith -- Is William Smith in NHL.com
-  # Daniil But -- Is Danil But in NHL.com
-  # Casey DeSmith -- Incorrect team
-  # Nikita Okhotyuk -- Is Nikita Okhotiuk in NHL.com
-  # Ivan Prosvetov -- Team not updated from offseason trade
-
+  
   # Or if we have one match greater than the others
   matches = sorted(matches, key=lambda x: x[1], reverse=True)
   if len(matches) > 1 and matches[0][1] > matches[1][1]:
     return matches[0][0]
 
-  # If we get here, we need help disambiguating 
+  # If we get here, we need help disambiguating
   print(f"Trouble finding matches for {ft_name}.")
 
   return None
@@ -203,45 +222,7 @@ def _write_updated_ids_file(ids):
     print("Cache datafile not found")
 
 
-def generate_data_for_capfriendly():
-
-  # 1. get fantrax CSV
-  download_fantrax_csv()
-  fantrax_data = load_fantrax_data_from_file()
-
-  # 2. Step through each Fantrax player and match them to their NHL.com ID, which is cached
-  fantrax_id_to_nhl_id = _load_ids_file()
-  for row in fantrax_data:
-    fantrax_id = row["ID"]
-    if fantrax_id in fantrax_id_to_nhl_id:
-      nhl_id = fantrax_id_to_nhl_id[fantrax_id]
-    else:
-      matched_player = match_fantrax_player_to_nhl_player(row)
-      if matched_player:
-        dob = requests.get(f"{NHL_API_BASE_URL}player/{matched_player['playerId']}/landing").json()["birthDate"]
-        print(f"FOUND: {row['Player']} {matched_player['name']} {dob}")
-        fantrax_id_to_nhl_id[fantrax_id] = { "nhl_id" : matched_player["playerId"], "name" : row["Player"], "DOB" : dob }
-
-  _write_updated_ids_file(fantrax_id_to_nhl_id)
-
-  # 3. merge together
-  merged_data = merge_data(fantrax_data, fantrax_id_to_nhl_id)
-
-  # 4. write to csv export
-  if not os.path.exists(OUTPUTS_DIR):
-    os.mkdir(OUTPUTS_DIR)  # init directory
-  with open(f'{OUTPUTS_DIR}/processed_data_for_cf.csv', 'w') as csvfile:
-    headers = [
-      _K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT
-    ] + season_headers
-    writer = csv.DictWriter(csvfile, fieldnames=headers, extrasaction='ignore')
-    writer.writeheader()
-    for player_obj in merged_data:
-      writer.writerow(player_obj)
-
-  # 5. Test access to the CapFriendly on OneDrive.
-  # TODO: Put the output in here instead of the output CSV
-  # TODO: This could stand to be cleaned up a bit too.
+def _acquire_azure_token():
   cache = msal.SerializableTokenCache()
   if os.path.exists(AZURE_TOKEN_CACHE):
     cache.deserialize(open(AZURE_TOKEN_CACHE, "r").read())
@@ -263,18 +244,40 @@ def generate_data_for_capfriendly():
   if not result:
     result = app.acquire_token_interactive(scopes=AZURE_SCOPES)
 
+  return result
+
+
+def generate_data_for_capfriendly():
+  # 1. get fantrax CSV
+  download_fantrax_csv()
+  fantrax_data = load_fantrax_data_from_file()
+
+  # 2. Step through each Fantrax player and match them to their NHL.com ID, which is cached
+  fantrax_id_to_nhl_id = _load_ids_file()
+  for row in fantrax_data:
+    fantrax_id = row[_K.ID]
+    if fantrax_id not in fantrax_id_to_nhl_id:
+      matched_player = match_fantrax_player_to_nhl_player(row)
+      if matched_player:
+        dob = requests.get(f"{NHL_API_BASE_URL}player/{matched_player[_K.PLAYER_ID]}/landing").json()["birthDate"]
+        print(f"FOUND: {row[_K.PLAYER]} {matched_player[_K.NAME]} {dob}")
+        fantrax_id_to_nhl_id[fantrax_id] = { "nhl_id" : matched_player[_K.PLAYER_ID], "name" : row[_K.PLAYER], "DOB" : dob }
+
+  _write_updated_ids_file(fantrax_id_to_nhl_id)
+
+  # 3. merge together
+  merged_data = merge_data(fantrax_data, fantrax_id_to_nhl_id)
+  if len(merged_data) == 0:
+    print('Failed to get any data from Fantrax. Aborting.')
+
+  data = []
+  headers = [_K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT] + season_headers
+  for player in merged_data:
+    data.append(list(dict(filter(lambda item: item[0] in headers, player.items())).values()))
+
+  # 4. Update the CapFriendly on OneDrive.
+  result = _acquire_azure_token()
   if 'access_token' in result:
-    # Read the data from our processed CSV into a payload for the POST
-    data = []
-    with open(f'{OUTPUTS_DIR}/processed_data_for_cf.csv', 'r') as csvfile:
-      for line in csvfile.readlines()[1:]:  # skip headers
-        line = line.replace('\n', '').split(",")
-        data.append(line)
-
-    # TODO: Add some sanity checks here and bail if necessary
-    if len(data) == 0:
-      print('Failed to get any data from Fantrax. Aborting.')
-
     # Get the range of the existing contracts to delete later
     resp = requests.get(
       f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/range',
@@ -282,7 +285,7 @@ def generate_data_for_capfriendly():
         'Authorization': f'Bearer {result["access_token"]}'
       }
     ).json()
-    addr_to_delete = resp["address"]
+    addr_to_delete = resp['address']
     addr_to_delete = addr_to_delete.replace("A1", "A2")
     addr_to_delete = addr_to_delete.split("!")[1]
 
