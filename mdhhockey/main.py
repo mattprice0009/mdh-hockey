@@ -17,7 +17,7 @@ from mdhhockey.constants import (
 
 
 curr_year = datetime.today().year
-curr_month = datetime.today().year
+curr_month = datetime.today().month
 if curr_month < 7:
   # Consider pre-July to be in-season still (e.g. May 2022 should start with 21-22, not 22-23)
   # TODO: We should probably just get this from somewhere in Fantrax. IE when we create the new league CapFriendly will automatically adjust
