@@ -12,7 +12,7 @@ from dateutil.relativedelta import relativedelta
 from mdhhockey.constants import (
   _K, AZURE_AUTHORITY, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_TOKEN_CACHE, AZURE_USER, CACHE_DIR,
   CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE,
-  INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL, OUTPUTS_DIR
+  INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL
 )
 
 
@@ -68,6 +68,7 @@ def match_fantrax_player_to_nhl_player(row):
     # Nikita Okhotyuk -- Is Nikita Okhotiuk in NHL.com
     # Ivan Prosvetov -- Team not updated from offseason trade
     # Anthony Beauvilier -- Team not updated from in-season trade
+    # Vasili  Ponomarev -- Is Vasily Ponomarev on NHL.com
 
     confidence = 0.0
 

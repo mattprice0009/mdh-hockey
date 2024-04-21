@@ -25,7 +25,7 @@ FANTRAX_EXPORT_FP = f'{INPUTS_DIR}/fantrax_export_latest.csv'
 # Fantrax Variables
 # This is the request sent when clicking the "download as CSV" button on the Fantrax Players page
 # We'll have to update the leagueId every year
-FANTRAX_LEAGUE_ID = 'y4o6od4vlgo113rd'
+FANTRAX_LEAGUE_ID = 'zc9e2jnblv9svu2t'
 FANTRAX_EXPORT_URL = f'https://www.fantrax.com/fxpa/downloadPlayerStats?leagueId={FANTRAX_LEAGUE_ID}&pageNumber=1&view=STATS&positionOrGroup=ALL&sortType=SALARY&statusOrTeamFilter=ALL_TAKEN'
 FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
 
