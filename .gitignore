@@ -6,3 +6,4 @@ mdhhockey/config.cfg
 mdhhockey/inputs/fantrax_export_latest.csv
 mdhhockey/outputs
 mdhhockey/response_cache
+mdhhockey/response_cache_bak
