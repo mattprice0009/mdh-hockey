@@ -184,6 +184,8 @@ def merge_data(fantrax_data, fantrax_to_nhl):
       num_years_to_set = 3  # ELC is 3 years
     elif output_obj[_K.CONTRACT] == 'Stream':
       num_years_to_set = 1  # Stream is 1 year
+    elif output_obj[_K.CONTRACT] == 'Expire':
+      num_years_to_set = 0 # Stream from last year, 0 years
     else:
       output_obj[_K.CONTRACT
                  ] = f"'0{output_obj[_K.CONTRACT]}"  # Escape for Excel formatting
