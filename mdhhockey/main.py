@@ -169,8 +169,8 @@ def merge_data(fantrax_data, fantrax_to_nhl):
       }
     }
   
-    # Set IR status
-    if output_obj['Roster Status'] == 'Inj Res':
+    # Set IR status, but not over the summer
+    if output_obj['Roster Status'] == 'Inj Res' and (curr_month <= 4 or curr_month >= 10):
       output_obj[_K.IR] = 'Y'
     else:
       output_obj[_K.IR] = ''
