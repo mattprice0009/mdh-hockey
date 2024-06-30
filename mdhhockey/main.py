@@ -129,7 +129,7 @@ def load_fantrax_data_from_file():
 def calculate_expiry_status(output_obj, num_years):
   dob = date.fromisoformat(output_obj[_K.DOB])
 
-  exp_year = season_headers[num_years].split("-")[1]
+  exp_year = season_headers[num_years].split("-")[0]
   exp_date = date.fromisoformat(
     f"{exp_year}-09-15"
   )  # Season rollover date. Also Defined in the Summary!Q10
