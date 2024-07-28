@@ -4,6 +4,7 @@ import json
 import os
 import re
 from datetime import date, datetime
+from bs4 import BeautifulSoup
 
 import msal
 import requests
@@ -11,7 +12,7 @@ from dateutil.relativedelta import relativedelta
 
 from mdhhockey.constants import (
   _K, AZURE_AUTHORITY, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_TOKEN_CACHE, AZURE_USER, CACHE_DIR,
-  CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_LOGIN_COOKIE,
+  CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_CAP_HITS_URL, FANTRAX_LOGIN_COOKIE,
   INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL
 )
 
@@ -94,7 +95,7 @@ def match_fantrax_player_to_nhl_player(row):
   # If we only have one match, return it
   if len(matches) == 1:
     return matches[0][0]
-  
+
   # Or if we have one match greater than the others
   matches = sorted(matches, key=lambda x: x[1], reverse=True)
   if len(matches) > 1 and matches[0][1] > matches[1][1]:
@@ -168,7 +169,7 @@ def merge_data(fantrax_data, fantrax_to_nhl):
         _K.TEAM: row['Status'],
       }
     }
-  
+
     # Set IR status, but not over the summer
     if output_obj['Roster Status'] == 'Inj Res' and (curr_month <= 4 or curr_month >= 10):
       output_obj[_K.IR] = 'Y'
@@ -276,6 +277,55 @@ def generate_data_for_capfriendly():
   headers = [_K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT] + season_headers
   data = list(list(player[k] for k in headers) for player in merged_data)
 
+  # 4. Get Cap Hits from Fantrax
+  headers = { 'Cookie': FANTRAX_LOGIN_COOKIE}
+  response_text = requests.get(FANTRAX_CAP_HITS_URL, headers=headers).text
+
+  soup = BeautifulSoup(response_text, 'html.parser')
+  cap_hit_data = soup.find('table', {'id': 'tblPenalties'})
+  hit_data = [] # Output array
+  for tr in cap_hit_data.find_all('tr')[1:]: # skip the header row
+    tds = tr.find_all('td')
+    
+    team_map = {
+      "51monkaolv9svu32": "0&Power",
+      "ccseaq80lv9svu32": "BAR",
+      "i9qis4mzlv9svu32": "BJS",
+      "72to8ve3lv9svu32": "CCHT",
+      "eetpluhdlv9svu32": "CTU",
+      "ksumuhcwlv9svu32": "DWM",
+      "6fq1ao06lv9svu32": "DZI",
+      "y1onc1wklv9svu32": "GetRekt",
+      "utrs5w3xlv9svu32": "CHZ",
+      "htpjxvbelv9svu32": "BR0KE",
+      "rccexq4mlv9svu32": "KINTO",
+      "fj3etrbdlv9svu32": "KSP",
+      "m4g260wilv9svu32": "HOGS",
+      "59ymxbedlv9svu32": "SSKL",
+      "wamzjyndlv9svu32": "EXP",
+      "ta515279lv9svu32": "WTM",
+      "5bafma0wlv9svu32": "WRINGS",
+      "br0cbbq0lv9svu32": "2PRO"
+    }
+    
+    team_id = team_map[tr['teamid']]
+    num_years = 0 if tds[2].text == "" else int(tds[2].text) - curr_year + 1
+    hit_val = int(tds[3].text.replace(",", ""))
+    player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
+    note = tds[5].text.lower()
+    if " drop " in note or " dropped " in note or " dump budget " in note:
+      hit_type = "Buyout"
+    else:
+      hit_type = "Retention"
+    
+    row = [player, "", team_id, "", "", "", hit_type]
+    for n in range(8):
+      if n < num_years:
+        row.append(hit_val)
+      else:
+        row.append("")
+    hit_data.append(row)
+
   # 4. Update the CapFriendly on OneDrive.
   result = _acquire_azure_token()
   if 'access_token' in result:
@@ -315,6 +365,40 @@ def generate_data_for_capfriendly():
 
     # TODO: Add a check to ensure this was successful and try again if not
 
+    resp = requests.get(
+      f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/tables/Hits/range',
+      headers={
+        'Authorization': f'Bearer {result["access_token"]}'
+      }
+    ).json()
+    addr_to_delete = resp['address']
+    addr_to_delete = addr_to_delete.replace("A1", "A2")
+    addr_to_delete = addr_to_delete.split("!")[1]
+
+    # TODO: Check to ensure we get a response and a valid address
+
+    # Then add the players from our new object
+    print('Adding to Cap Hits table...')
+    resp = requests.post(
+      f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/tables/Hits/rows',
+      json={
+        'values': hit_data,
+        'index': None
+      },
+      headers={ 'Authorization': f'Bearer {result["access_token"]}'}
+    )
+
+    # TODO: Add a check to ensure this worked and bail or try again if not
+
+    # Finally delete all the previous rows
+    print('Deleting existing Cap Hits table...')
+    resp = requests.post(
+      f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/range(address='{addr_to_delete}')/delete",
+      json={ 'shift': 'Up'},
+      headers={ 'Authorization': f'Bearer {result["access_token"]}'}
+    )
+
+    # TODO: Add a check to ensure this was successful and try again if not
 
 if __name__ == '__main__':
   generate_data_for_capfriendly()
