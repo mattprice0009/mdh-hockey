@@ -12,19 +12,15 @@ from dateutil.relativedelta import relativedelta
 
 from mdhhockey.constants import (
   _K, AZURE_AUTHORITY, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_TOKEN_CACHE, AZURE_USER, CACHE_DIR,
-  CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_EXPORT_URL, FANTRAX_CAP_HITS_URL, FANTRAX_LOGIN_COOKIE,
-  INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL
+  CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_LEAGUE_URL, FANTRAX_EXPORT_URL, FANTRAX_CAP_HITS_URL,
+  FANTRAX_LOGIN_COOKIE, INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL
 )
 
-
-curr_year = datetime.today().year
-curr_month = datetime.today().month
-if curr_month < 5:
-  # Consider pre-May to be in-season still (e.g. May 2022 should start with 21-22, not 22-23)
-  # TODO: We should probably just get this from somewhere in Fantrax. IE when we create the new league CapFriendly will automatically adjust
-  curr_year = curr_year - 1
+payload = {"msgs": [{"method": "getFantasyLeagueInfo", "data": {}}]}
+league_data = requests.post(FANTRAX_LEAGUE_URL, json=payload).json()
+curr_year = int(league_data["responses"][0]["data"]["fantasySettings"]["season"]["displayYear"].split("-")[0])
+curr_month = datetime.today().month # For IR relevance
 season_headers = [ f'{curr_year+i}-{curr_year+(i+1)}' for i in range(0, 8) ]
-
 
 def _replace_special_chars(name):
   """
