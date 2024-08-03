@@ -4,5 +4,5 @@ MAILTO=jeremy.vercillo@gmail.com
 
 # m h dom mon dow user command
 
-# MDH CapFriendly upadter -- runs every day a minute after waivers process (12:01pm EST)
-01 12 * * *     jeremy      python3 /home/jeremy/mdh-hockey/mdhhockey/main.py
+# MDH CapFriendly upadter -- runs 4 times a day, most notably after waivers processes (12:01pm EST)
+01 */6 * * *     jeremy      python3 /home/jeremy/mdh-hockey/mdhhockey/main.py

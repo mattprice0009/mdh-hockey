@@ -282,7 +282,7 @@ def generate_data_for_capfriendly():
   hit_data = [] # Output array
   for tr in cap_hit_data.find_all('tr')[1:]: # skip the header row
     tds = tr.find_all('td')
-    
+
     team_map = {
       "51monkaolv9svu32": "0&Power",
       "ccseaq80lv9svu32": "BAR",
@@ -303,17 +303,17 @@ def generate_data_for_capfriendly():
       "5bafma0wlv9svu32": "WRINGS",
       "br0cbbq0lv9svu32": "2PRO"
     }
-    
+
     team_id = team_map[tr['teamid']]
     num_years = 0 if tds[2].text == "" else int(tds[2].text) - curr_year + 1
     hit_val = int(tds[3].text.replace(",", ""))
     player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
     note = tds[5].text.lower()
-    if " drop " in note or " dropped " in note or " dump budget " in note:
+    if " drop " in note or " dropped " in note or " dump budget " in note or "buyout" in note:
       hit_type = "Buyout"
     else:
       hit_type = "Retention"
-    
+
     row = [player, "", team_id, "", "", "", hit_type]
     for n in range(8):
       if n < num_years:
