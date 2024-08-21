@@ -309,7 +309,7 @@ def generate_data_for_capfriendly():
     hit_val = int(tds[3].text.replace(",", ""))
     player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
     note = tds[5].text.lower()
-    if " drop " in note or " dropped " in note or " dump budget " in note or "buyout" in note:
+    if " drop " in note or " dropped " in note or " dropping "in note or " dump budget " in note or "buyout" in note:
       hit_type = "Buyout"
     else:
       hit_type = "Retention"
