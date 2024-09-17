@@ -1,37 +1,31 @@
-import atexit
+# TODO
+# - Add validation/retries for Excel operations
+# - Split helpers.py into nhl_helpers, fantrax_helpers, and azure_helpers
+# - Get Offseason/in-season IR from Fantrax settings
+
 import csv
 import json
 import os
 import re
+import requests
 from datetime import date, datetime
+from dateutil.relativedelta import relativedelta
 from bs4 import BeautifulSoup
 
-import msal
-import requests
-from dateutil.relativedelta import relativedelta
-
-from mdhhockey.constants import (
-  _K, AZURE_AUTHORITY, AZURE_CLIENT_ID, AZURE_SCOPES, AZURE_TOKEN_CACHE, AZURE_USER, CACHE_DIR,
-  CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_LEAGUE_URL, FANTRAX_EXPORT_URL, FANTRAX_CAP_HITS_URL,
-  FANTRAX_LOGIN_COOKIE, INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL
+from mdhhockey.helpers import (_replace_special_chars, _acquire_azure_token)
+from mdhhockey.helpers import (
+  _K, CACHE_DIR, CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_LEAGUE_URL, FANTRAX_EXPORT_URL, FANTRAX_CAP_HITS_URL,
+  FANTRAX_LOGIN_COOKIE, INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL, FANTRAX_TEAM_MAP
 )
 
+# Get basic league data from Fantrax that is used globally
 payload = {"msgs": [{"method": "getFantasyLeagueInfo", "data": {}}]}
 league_data = requests.post(FANTRAX_LEAGUE_URL, json=payload).json()
 curr_year = int(league_data["responses"][0]["data"]["fantasySettings"]["season"]["displayYear"].split("-")[0])
 curr_month = datetime.today().month # For IR relevance
 season_headers = [ f'{curr_year+i}-{curr_year+(i+1)}' for i in range(0, 8) ]
 
-def _replace_special_chars(name):
-  """
-    Replaces special unicode characters with English alternatives (e.g. replacing
-    the accented u with an English "u").
-  """
-  replacements = [('\u00fc', 'u'), ('\u00e8', 'e')]
-  for r in replacements:
-    name = name.replace(r[0], r[1])
-  return name
-
+#region Fantrax methods
 
 def match_fantrax_player_to_nhl_player(row):
   """
@@ -102,7 +96,6 @@ def match_fantrax_player_to_nhl_player(row):
 
   return None
 
-
 def download_fantrax_csv():
   headers = { 'Cookie': FANTRAX_LOGIN_COOKIE}
   player_data = requests.get(FANTRAX_EXPORT_URL, headers=headers).text
@@ -112,7 +105,6 @@ def download_fantrax_csv():
   with open(FANTRAX_EXPORT_FP, 'w') as csvfile:
     csvfile.write(player_data)
 
-
 def load_fantrax_data_from_file():
   player_objs = []
   with open(FANTRAX_EXPORT_FP, 'r') as csvfile:
@@ -121,7 +113,6 @@ def load_fantrax_data_from_file():
       row[_K.AAV] = int(re.sub(r'\D', '', row[_K.AAV]))  # remove commas rom AAV
       player_objs.append(row)
   return player_objs
-
 
 def calculate_expiry_status(output_obj, num_years):
   dob = date.fromisoformat(output_obj[_K.DOB])
@@ -143,7 +134,6 @@ def calculate_expiry_status(output_obj, num_years):
     return f"RFA ({difference_in_years})"
   else:
     return f"UFA ({difference_in_years})"
-
 
 def merge_data(fantrax_data, fantrax_to_nhl):
   """
@@ -201,59 +191,19 @@ def merge_data(fantrax_data, fantrax_to_nhl):
     merged_data.append(output_obj)
   return merged_data
 
-
-def _load_ids_file():
+def get_fantrax_to_nhl_ids_map(fantrax_data):
+  # Load from cached IDs file
   try:
     with open(f"{CACHE_DIR}/player_ids.json", "r") as f:
       try:
-        return json.load(f)
+        fantrax_id_to_nhl_id = json.load(f)
       except:
+        print("Could not read cached json ids file")
         return {}
   except:
     print("Cache datafile not found")
     return {}
 
-
-def _write_updated_ids_file(ids):
-  try:
-    with open(f"{CACHE_DIR}/player_ids.json", "w") as f:
-      json.dump(ids, f)
-  except:
-    print("Cache datafile not found")
-
-
-def _acquire_azure_token():
-  cache = msal.SerializableTokenCache()
-  if os.path.exists(AZURE_TOKEN_CACHE):
-    cache.deserialize(open(AZURE_TOKEN_CACHE, "r").read())
-
-  atexit.register(
-    lambda: open(AZURE_TOKEN_CACHE, "w").write(cache.serialize())
-    if cache.has_state_changed else None
-  )
-
-  app = msal.PublicClientApplication(
-    AZURE_CLIENT_ID, authority=AZURE_AUTHORITY, token_cache=cache
-  )
-
-  result = None
-  accounts = app.get_accounts(username=AZURE_USER)
-  if accounts:
-    result = app.acquire_token_silent(AZURE_SCOPES, account=accounts[0])
-
-  if not result:
-    result = app.acquire_token_interactive(scopes=AZURE_SCOPES)
-
-  return result
-
-
-def generate_data_for_capfriendly():
-  # 1. get fantrax CSV
-  download_fantrax_csv()
-  fantrax_data = load_fantrax_data_from_file()
-
-  # 2. Step through each Fantrax player and match them to their NHL.com ID, which is cached
-  fantrax_id_to_nhl_id = _load_ids_file()
   for row in fantrax_data:
     fantrax_id = row[_K.ID]
     if fantrax_id not in fantrax_id_to_nhl_id:
@@ -263,17 +213,42 @@ def generate_data_for_capfriendly():
         print(f"FOUND: {row[_K.PLAYER]} {matched_player[_K.NAME]} {dob}")
         fantrax_id_to_nhl_id[fantrax_id] = { "nhl_id" : matched_player[_K.PLAYER_ID], "name" : row[_K.PLAYER], "DOB" : dob }
 
-  _write_updated_ids_file(fantrax_id_to_nhl_id)
+  # Write the updated cache file
+  try:
+    with open(f"{CACHE_DIR}/player_ids.json", "w") as f:
+      json.dump(fantrax_id_to_nhl_id, f)
+  except:
+    print("Cache datafile not found")
+
+  return fantrax_id_to_nhl_id
+
+def get_contract_data():
+  # 1. get fantrax CSV
+  try:
+    download_fantrax_csv()
+    fantrax_data = load_fantrax_data_from_file()
+  except:
+    print("Failed to download data from Fantrax. Aborting.")
+    quit()
+
+  # 2. Step through each Fantrax player and match them to their NHL.com ID, which is cached
+  fantrax_id_to_nhl_id = get_fantrax_to_nhl_ids_map(fantrax_data)
+  if fantrax_id_to_nhl_id == {}:
+    print("Failed to get NHL IDs. Aborting.")
+    quit()
 
   # 3. merge together
   merged_data = merge_data(fantrax_data, fantrax_id_to_nhl_id)
   if len(merged_data) == 0:
     print('Failed to get any data from Fantrax. Aborting.')
+    quit()
 
   headers = [_K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT] + season_headers
-  data = list(list(player[k] for k in headers) for player in merged_data)
+  contract_data = list(list(player[k] for k in headers) for player in merged_data)
 
-  # 4. Get Cap Hits from Fantrax
+  return contract_data
+
+def get_caphit_data():
   headers = { 'Cookie': FANTRAX_LOGIN_COOKIE}
   response_text = requests.get(FANTRAX_CAP_HITS_URL, headers=headers).text
 
@@ -283,28 +258,7 @@ def generate_data_for_capfriendly():
   for tr in cap_hit_data.find_all('tr')[1:]: # skip the header row
     tds = tr.find_all('td')
 
-    team_map = {
-      "51monkaolv9svu32": "0&Power",
-      "ccseaq80lv9svu32": "BAR",
-      "i9qis4mzlv9svu32": "BJS",
-      "72to8ve3lv9svu32": "CCHT",
-      "eetpluhdlv9svu32": "CTU",
-      "ksumuhcwlv9svu32": "DWM",
-      "6fq1ao06lv9svu32": "DZI",
-      "y1onc1wklv9svu32": "GetRekt",
-      "utrs5w3xlv9svu32": "CHZ",
-      "htpjxvbelv9svu32": "BR0KE",
-      "rccexq4mlv9svu32": "KINTO",
-      "fj3etrbdlv9svu32": "KSP",
-      "m4g260wilv9svu32": "HOGS",
-      "59ymxbedlv9svu32": "SSKL",
-      "wamzjyndlv9svu32": "EXP",
-      "ta515279lv9svu32": "WTM",
-      "5bafma0wlv9svu32": "WRINGS",
-      "br0cbbq0lv9svu32": "2PRO"
-    }
-
-    team_id = team_map[tr['teamid']]
+    team_id = FANTRAX_TEAM_MAP[tr['teamid']]
     num_years = 0 if tds[2].text == "" else int(tds[2].text) - curr_year + 1
     hit_val = int(tds[3].text.replace(",", ""))
     player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
@@ -322,79 +276,63 @@ def generate_data_for_capfriendly():
         row.append("")
     hit_data.append(row)
 
-  # 4. Update the CapFriendly on OneDrive.
+  return hit_data
+
+#endregion
+#region azure/excel functions
+
+def get_existing_range(table, token):
+  resp = requests.get(
+    f"{table}/range",
+    headers={'Authorization': f'Bearer {token}'}
+  ).json()
+  addr_range = resp['address']
+  addr_range = addr_range.replace("A1", "A2")
+  addr_range = addr_range.split("!")[1]
+
+  return addr_range
+
+def add_data_to_table(table, data, token):
+  print(f'Adding to {table.split("/")[-1]} table from CSV...')
+  resp = requests.post(
+    f"{table}/rows",
+    json={'values': data, 'index': None},
+    headers={'Authorization': f'Bearer {token}'}
+  )
+
+def delete_old_range(sheet, range, token):
+  print(f'Deleting existing {sheet} table...')
+  resp = requests.post(
+    f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/{sheet}/range(address='{range}')/delete",
+    json={'shift': 'Up'},
+    headers={'Authorization': f'Bearer {token}'}
+  )
+
+#endregion
+
+def generate_data_for_capfriendly():
+  contract_data = get_contract_data()
+  caphit_data = get_caphit_data()
+
   result = _acquire_azure_token()
-  if 'access_token' in result:
-    # Get the range of the existing contracts to delete later
-    resp = requests.get(
-      f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/range',
-      headers={
-        'Authorization': f'Bearer {result["access_token"]}'
-      }
-    ).json()
-    addr_to_delete = resp['address']
-    addr_to_delete = addr_to_delete.replace("A1", "A2")
-    addr_to_delete = addr_to_delete.split("!")[1]
+  if "access_token" not in result:
+    print("Unable to get Azure access_token. Aboritng.")
+    quit()
 
-    # TODO: Check to ensure we get a response and a valid address
+  token = result["access_token"]
 
-    # Then add the players from our new object
-    print('Adding to Players table from CSV...')
-    resp = requests.post(
-      f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players/rows',
-      json={
-        'values': data,
-        'index': None
-      },
-      headers={ 'Authorization': f'Bearer {result["access_token"]}'}
-    )
+  CONTRACTS_TABLE = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players'
+  HITS_TABLE = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/tables/Hits'
 
-    # TODO: Add a check to ensure this worked and bail or try again if not
+  # TODO: Ensure we validate after these operations and retry if necessary
+  contracts_range = get_existing_range(CONTRACTS_TABLE, token) # Get the range of the existing contracts to delete later
+  add_data_to_table(CONTRACTS_TABLE, contract_data, token) # Add the players from our new object
+  delete_old_range("All Contracts", contracts_range, token) # Finally delete all the previous rows
 
-    # Finally delete all the previous rows
-    print('Deleting existing Players table...')
-    resp = requests.post(
-      f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/range(address='{addr_to_delete}')/delete",
-      json={ 'shift': 'Up'},
-      headers={ 'Authorization': f'Bearer {result["access_token"]}'}
-    )
-
-    # TODO: Add a check to ensure this was successful and try again if not
-
-    resp = requests.get(
-      f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/tables/Hits/range',
-      headers={
-        'Authorization': f'Bearer {result["access_token"]}'
-      }
-    ).json()
-    addr_to_delete = resp['address']
-    addr_to_delete = addr_to_delete.replace("A1", "A2")
-    addr_to_delete = addr_to_delete.split("!")[1]
-
-    # TODO: Check to ensure we get a response and a valid address
-
-    # Then add the players from our new object
-    print('Adding to Cap Hits table...')
-    resp = requests.post(
-      f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/tables/Hits/rows',
-      json={
-        'values': hit_data,
-        'index': None
-      },
-      headers={ 'Authorization': f'Bearer {result["access_token"]}'}
-    )
-
-    # TODO: Add a check to ensure this worked and bail or try again if not
-
-    # Finally delete all the previous rows
-    print('Deleting existing Cap Hits table...')
-    resp = requests.post(
-      f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/range(address='{addr_to_delete}')/delete",
-      json={ 'shift': 'Up'},
-      headers={ 'Authorization': f'Bearer {result["access_token"]}'}
-    )
-
-    # TODO: Add a check to ensure this was successful and try again if not
+  hits_range = get_existing_range(HITS_TABLE, token) # Get the range of the existing contracts to delete later
+  add_data_to_table(HITS_TABLE, caphit_data, token) # Add the players from our new object
+  delete_old_range("All Penalties", hits_range, token) # Finally delete all the previous rows
+  # END TODO
 
 if __name__ == '__main__':
   generate_data_for_capfriendly()
