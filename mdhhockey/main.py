@@ -2,6 +2,7 @@
 # - Add validation/retries for Excel operations
 # - Split helpers.py into nhl_helpers, fantrax_helpers, and azure_helpers
 # - Get Offseason/in-season IR from Fantrax settings
+# - Better buyout/retention handling, and warnings for OTHER category
 
 import csv
 import json
@@ -253,9 +254,9 @@ def get_caphit_data():
   response_text = requests.get(FANTRAX_CAP_HITS_URL, headers=headers).text
 
   soup = BeautifulSoup(response_text, 'html.parser')
-  cap_hit_data = soup.find('table', {'id': 'tblPenalties'})
+  caphit_data = soup.find('table', {'id': 'tblPenalties'})
   hit_data = [] # Output array
-  for tr in cap_hit_data.find_all('tr')[1:]: # skip the header row
+  for tr in caphit_data.find_all('tr')[1:]: # skip the header row
     tds = tr.find_all('td')
 
     team_id = FANTRAX_TEAM_MAP[tr['teamid']]
@@ -263,7 +264,7 @@ def get_caphit_data():
     hit_val = int(tds[3].text.replace(",", ""))
     player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
     note = tds[5].text.lower()
-    if " drop " in note or " dropped " in note or " dropping "in note or " dump budget " in note or "buyout" in note:
+    if " drop " in note or " dropped " in note or " dropping " in note or " dump budget " in note or "buyout" in note:
       hit_type = "Buyout"
     else:
       hit_type = "Retention"
