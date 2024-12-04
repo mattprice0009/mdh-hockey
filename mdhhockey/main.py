@@ -261,9 +261,14 @@ def get_caphit_data():
 
     team_id = FANTRAX_TEAM_MAP[tr['teamid']]
     num_years = 0 if tds[2].text == "" else int(tds[2].text) - curr_year + 1
+    note = tds[5].text.lower()
+
+    # Skip penalties that are just streamer drops
+    if num_years == 0 and "penalty is 0%" in note:
+      continue
+
     hit_val = int(tds[3].text.replace(",", ""))
     player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
-    note = tds[5].text.lower()
     if " drop " in note or " dropped " in note or " dropping " in note or " dump budget " in note or "buyout" in note:
       hit_type = "Buyout"
     else:
