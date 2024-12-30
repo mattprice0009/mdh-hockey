@@ -288,11 +288,9 @@ def get_caphit_data():
 #region azure/excel functions
 
 def get_existing_range(table, token):
-  resp = requests.get(
-    f"{table}/range",
-    headers={'Authorization': f'Bearer {token}'}
-  ).json()
-  addr_range = resp['address']
+  resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
+  print(resp.status_code)
+  addr_range = resp.json()['address']
   addr_range = addr_range.replace("A1", "A2")
   addr_range = addr_range.split("!")[1]
 
