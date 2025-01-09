@@ -9,6 +9,7 @@ import json
 import os
 import re
 import requests
+import time
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from bs4 import BeautifulSoup
@@ -289,7 +290,10 @@ def get_caphit_data():
 
 def get_existing_range(table, token):
   resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
+  time.sleep(5)
+
   print(resp.status_code)
+
   addr_range = resp.json()['address']
   addr_range = addr_range.replace("A1", "A2")
   addr_range = addr_range.split("!")[1]
