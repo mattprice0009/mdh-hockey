@@ -93,7 +93,6 @@ def _acquire_azure_token():
   accounts = app.get_accounts(username=AZURE_USER)
   if accounts:
     result = app.acquire_token_silent(AZURE_SCOPES, account=accounts[0])
-    print(result)
 
   if not result:
     print("Could not renew token, need interactive acquisition.")
