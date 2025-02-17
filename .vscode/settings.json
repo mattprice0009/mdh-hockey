@@ -4,7 +4,7 @@
     "python.linting.pylintPath": "pylint",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-        "source.organizeImports": true
+        "source.organizeImports": "explicit"
     },
     "python.formatting.provider": "yapf",
     "editor.rulers": [

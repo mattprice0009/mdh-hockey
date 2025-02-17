@@ -4,6 +4,8 @@
 # - Get Offseason/in-season IR from Fantrax settings
 # - Better buyout/retention handling, and warnings for OTHER category
 
+# Location of this app: https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps
+
 import csv
 import json
 import os
@@ -289,10 +291,12 @@ def get_caphit_data():
 #region azure/excel functions
 
 def get_existing_range(table, token):
+  print(table)
   resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
-  time.sleep(5)
 
   print(resp.status_code)
+  if resp.status_code == 401:
+    print(resp.text)
 
   addr_range = resp.json()['address']
   addr_range = addr_range.replace("A1", "A2")
