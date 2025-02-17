@@ -69,7 +69,7 @@ def _replace_special_chars(name):
 
 # Azure/OneDrive variables and helpers
 AZURE_CLIENT_ID = config['azure']['client_id']
-AZURE_SCOPES = ['https://graph.microsoft.com/.default']
+AZURE_SCOPES = ["Files.ReadWrite.All", "User.Read"]
 AZURE_AUTHORITY = 'https://login.microsoftonline.com/consumers'
 AZURE_TOKEN_CACHE = f'{CACHE_DIR}/cache.bin'
 AZURE_USER = config['azure']['user']
@@ -93,6 +93,7 @@ def _acquire_azure_token():
   accounts = app.get_accounts(username=AZURE_USER)
   if accounts:
     result = app.acquire_token_silent(AZURE_SCOPES, account=accounts[0])
+    print("Access Token Scopes:", result.get("scope"))
 
   if not result:
     print("Could not renew token, need interactive acquisition.")
