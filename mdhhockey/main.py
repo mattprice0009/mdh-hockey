@@ -289,12 +289,13 @@ def get_caphit_data():
 
 #endregion
 #region azure/excel functions
-
 def get_existing_range(table, token):
-  print(table)
-  resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
+  # I have no clue why, but hitting this endpoint before the one I want to hit fixes my auth issues. I think it's a security bug, but /shrug
+  resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
 
+  resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
   print(resp.status_code)
+
   if resp.status_code == 401:
     print(resp.text)
 
