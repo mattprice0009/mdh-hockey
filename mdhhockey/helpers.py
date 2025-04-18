@@ -20,7 +20,7 @@ FANTRAX_EXPORT_FP = f'{INPUTS_DIR}/fantrax_export_latest.csv'
 # Fantrax Variables
 # This is the request sent when clicking the "download as CSV" button on the Fantrax Players page
 # We'll have to update the leagueId every year
-FANTRAX_LEAGUE_ID = 'zc9e2jnblv9svu2t'
+FANTRAX_LEAGUE_ID = '7ues8jxvm9n3hdb3'
 FANTRAX_LEAGUE_URL = f"https://www.fantrax.com/fxpa/req?leagueId={FANTRAX_LEAGUE_ID}"
 FANTRAX_EXPORT_URL = f'https://www.fantrax.com/fxpa/downloadPlayerStats?leagueId={FANTRAX_LEAGUE_ID}&pageNumber=1&view=STATS&positionOrGroup=ALL&sortType=SALARY&statusOrTeamFilter=ALL_TAKEN'
 FANTRAX_CAP_HITS_URL = f'https://www.fantrax.com/newui/fantasy/capHitPenaltyAdmin.go?leagueId={FANTRAX_LEAGUE_ID}'
@@ -28,24 +28,24 @@ FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
 
 # Map of fantrax page IDs to team abbreviations
 FANTRAX_TEAM_MAP = {
-  "51monkaolv9svu32": "0&Power",
-  "ccseaq80lv9svu32": "BAR",
-  "i9qis4mzlv9svu32": "BJS",
-  "72to8ve3lv9svu32": "CCHT",
-  "eetpluhdlv9svu32": "CTU",
-  "ksumuhcwlv9svu32": "DWM",
-  "6fq1ao06lv9svu32": "DZI",
-  "y1onc1wklv9svu32": "GetRekt",
-  "utrs5w3xlv9svu32": "CHZ",
-  "htpjxvbelv9svu32": "BR0KE",
-  "rccexq4mlv9svu32": "KINTO",
-  "fj3etrbdlv9svu32": "KSP",
-  "m4g260wilv9svu32": "HOGS",
-  "59ymxbedlv9svu32": "SSKL",
-  "wamzjyndlv9svu32": "EXP",
-  "ta515279lv9svu32": "WTM",
-  "5bafma0wlv9svu32": "WRINGS",
-  "br0cbbq0lv9svu32": "2PRO"
+  "y5emvsbum9n3hdcu": "0&Power",
+  "no8l7v19m9n3hdde": "BAR",
+  "79lz41ivm9n3hddt": "BJS",
+  "tr1w9br0m9n3hddk": "CCHT",
+  "5skfzilpm9n3hdd2": "CTU",
+  "mjyaxof2m9n3hdd0": "DWM",
+  "mvony3hzm9n3hdcx": "DZI",
+  "68vayxuim9n3hddm": "GetRekt",
+  "kdo9yxd3m9n3hddo": "CHZ",
+  "tvblokncm9n3hddq": "BR0KE",
+  "vpjsvmrum9n3hddv": "KINTO",
+  "zqjz8sajm9n3hddb": "KSP",
+  "7bcpwxhym9n3hddx": "HOGS",
+  "bpydbibzm9n3hdcz": "SSKL",
+  "e5bgcusmm9n3hdd8": "EXP",
+  "sc1fjgaim9n3hddi": "WTM",
+  "dqdz3kx3m9n3hddh": "WRINGS",
+  "hkyuwyfem9n3hdd5": "2PRO"
 }
 
 # Directory to output the CSV into
