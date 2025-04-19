@@ -1,8 +1,0 @@
-SHELL=/bin/sh
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-MAILTO=""
-
-# m h dom mon dow user command
-
-# MDH CapFriendly updater -- runs hourly, most notably after waivers processes (12:01pm EST)
-01 */6 * * *     jeremy      python3 /home/jeremy/mdh-hockey/mdhhockey/main.py 2>&1 | mail -s "MDH CapFriendly Update `date`" jeremy.vercillo@gmail.com
