@@ -3,7 +3,9 @@ mdhhockey.egg-info*
 *__pycache__*
 
 mdhhockey/config.cfg
+mdhhockey/cronjob.log
 mdhhockey/inputs/fantrax_export_latest.csv
 mdhhockey/outputs
 mdhhockey/response_cache
 mdhhockey/response_cache_bak
+
