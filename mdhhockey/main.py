@@ -26,8 +26,9 @@ from mdhhockey.helpers import (
 payload = {"msgs": [{"method": "getFantasyLeagueInfo", "data": {}}]}
 league_data = requests.post(FANTRAX_LEAGUE_URL, json=payload).json()
 curr_year = int(league_data["responses"][0]["data"]["fantasySettings"]["season"]["displayYear"].split("-")[0])
-curr_month = datetime.today().month # For IR relevance
 season_headers = [ f'{curr_year+i}-{curr_year+(i+1)}' for i in range(0, 8) ]
+
+is_offseason = (curr_year == datetime.today().year) and datetime.today().month < 9
 
 #region Fantrax methods
 
@@ -161,7 +162,7 @@ def merge_data(fantrax_data, fantrax_to_nhl):
     }
 
     # Set IR status, but not over the summer
-    if output_obj['Roster Status'] == 'Inj Res' and (curr_month <= 4 or curr_month >= 10):
+    if output_obj['Roster Status'] == 'Inj Res' and not is_offseason:
       output_obj[_K.IR] = 'Y'
     else:
       output_obj[_K.IR] = ''
