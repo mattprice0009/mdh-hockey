@@ -129,11 +129,9 @@ def calculate_expiry_status(output_obj, num_years):
 
   difference_in_years = relativedelta(exp_date, dob).years
 
-  extensions = [line.rstrip() for line in open(f"{INPUTS_DIR}/extensions.csv", "r")]
-
   if "ELC" in output_obj[_K.CONTRACT]:
     return f"RFA ({difference_in_years}*)"
-  elif output_obj[_K.PLAYER] not in extensions and (
+  elif output_obj[_K.PLAYER] and (
     (difference_in_years < 26 and output_obj[_K.POSITION] != "G") or
     (difference_in_years < 28 and output_obj[_K.POSITION] == "G")):
     return f"RFA ({difference_in_years})"
