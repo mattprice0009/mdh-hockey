@@ -2,7 +2,6 @@
 # - Add validation/retries for Excel operations
 # - Split helpers.py into nhl_helpers, fantrax_helpers, and azure_helpers
 # - Get Offseason/in-season IR from Fantrax settings
-# - Better buyout/retention handling, and warnings for OTHER category
 
 # Location of this app: https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps
 
@@ -271,10 +270,14 @@ def get_caphit_data():
 
     hit_val = int(tds[3].text.replace(",", ""))
     player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
-    if " drop " in note or " dropped " in note or " dropping " in note or " dump budget " in note or "buyout" in note:
-      hit_type = "Buyout"
-    else:
+#    if " drop " in note or " dropped " in note or " dropping " in note or " dump budget " in note or "buyout" in note:
+#      hit_type = "Buyout"
+#    else:
+#      hit_type = "Retention"
+    if "retain" in note or "retention" in note or "trade" in note:
       hit_type = "Retention"
+    else:
+      hit_type = "Buyout"
 
     row = [player, "", team_id, "", "", "", hit_type]
     for n in range(8):
