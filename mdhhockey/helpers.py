@@ -28,21 +28,21 @@ FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
 
 # Map of fantrax page IDs to team abbreviations
 FANTRAX_TEAM_MAP = {
-  "y5emvsbum9n3hdcu": "0&Power",
   "no8l7v19m9n3hdde": "BAR",
+  "tvblokncm9n3hddq": "BR0KE",
   "79lz41ivm9n3hddt": "BJS",
   "tr1w9br0m9n3hddk": "CCHT",
+  "kdo9yxd3m9n3hddo": "CHZ",
   "5skfzilpm9n3hdd2": "CTU",
   "mjyaxof2m9n3hdd0": "DWM",
-  "mvony3hzm9n3hdcx": "DZI",
+  "e5bgcusmm9n3hdd8": "EXP",
   "68vayxuim9n3hddm": "GetRekt",
-  "kdo9yxd3m9n3hddo": "CHZ",
-  "tvblokncm9n3hddq": "BR0KE",
+  "7bcpwxhym9n3hddx": "HOGS",
   "vpjsvmrum9n3hddv": "KINTO",
   "zqjz8sajm9n3hddb": "KSP",
-  "7bcpwxhym9n3hddx": "HOGS",
   "bpydbibzm9n3hdcz": "SSKL",
-  "e5bgcusmm9n3hdd8": "EXP",
+  "mvony3hzm9n3hdcx": "SSH",
+  "y5emvsbum9n3hdcu": "THFM",
   "sc1fjgaim9n3hddi": "WTM",
   "dqdz3kx3m9n3hddh": "WRINGS",
   "hkyuwyfem9n3hdd5": "2PRO"

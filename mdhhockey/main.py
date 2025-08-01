@@ -322,6 +322,7 @@ def delete_old_range(sheet, range, token):
     json={'shift': 'Up'},
     headers={'Authorization': f'Bearer {token}'}
   )
+  print("Delete status:", resp.status_code, resp.text)
 
 #endregion
 
