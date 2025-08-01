@@ -1,1 +1,8 @@
-/etc/cron.d/mdh
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=""
+
+# m h dom mon dow user command
+
+# MDH CapFriendly updater -- runs every hour, most notably after waivers processes (12:01pm EST)
+01 * * * *     jeremy      /home/jeremy/mdh-hockey/run_mdh.sh >> /home/jeremy/mdh-hockey/cronjob.log 2>&1
