@@ -304,6 +304,8 @@ def get_existing_range(table, token):
   return addr_range
 
 def add_data_to_table(table, data, token):
+  resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
+
   retries = 0
   while retries < 5:
     print(f'Adding to {table.split("/")[-1]} table from CSV...')
@@ -320,6 +322,8 @@ def add_data_to_table(table, data, token):
       break
 
 def delete_old_range(sheet, range, token):
+  resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
+
   retries = 0
   while retries < 5:
     print(f'Deleting existing {sheet} table...')
