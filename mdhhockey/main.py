@@ -270,10 +270,6 @@ def get_caphit_data():
 
     hit_val = int(tds[3].text.replace(",", ""))
     player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
-#    if " drop " in note or " dropped " in note or " dropping " in note or " dump budget " in note or "buyout" in note:
-#      hit_type = "Buyout"
-#    else:
-#      hit_type = "Retention"
     if "retain" in note or "retention" in note or "trade" in note:
       hit_type = "Retention"
     else:
@@ -308,21 +304,36 @@ def get_existing_range(table, token):
   return addr_range
 
 def add_data_to_table(table, data, token):
-  print(f'Adding to {table.split("/")[-1]} table from CSV...')
-  resp = requests.post(
-    f"{table}/rows",
-    json={'values': data, 'index': None},
-    headers={'Authorization': f'Bearer {token}'}
-  )
+  retries = 0
+  while retries < 5:
+    print(f'Adding to {table.split("/")[-1]} table from CSV...')
+    resp = requests.post(
+      f"{table}/rows",
+      json={'values': data, 'index': None},
+      headers={'Authorization': f'Bearer {token}'}
+    )
+    print("Add status:", resp.status_code, resp.text)
+    retries += 1
+
+    if resp.status_code == 200:
+      print(f"Success. Exiting...")
+      break
 
 def delete_old_range(sheet, range, token):
-  print(f'Deleting existing {sheet} table...')
-  resp = requests.post(
-    f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/{sheet}/range(address='{range}')/delete",
-    json={'shift': 'Up'},
-    headers={'Authorization': f'Bearer {token}'}
-  )
-  print("Delete status:", resp.status_code, resp.text)
+  retries = 0
+  while retries < 5:
+    print(f'Deleting existing {sheet} table...')
+    resp = requests.post(
+      f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/{sheet}/range(address='{range}')/delete",
+      json={'shift': 'Up'},
+      headers={'Authorization': f'Bearer {token}'}
+    )
+    print("Delete status:", resp.status_code, resp.text)
+    retries += 1
+
+    if resp.status_code == 204:
+      print(f"Success. Exiting...")
+      break
 
 #endregion
 
