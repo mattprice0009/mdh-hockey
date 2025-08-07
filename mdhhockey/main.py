@@ -315,7 +315,7 @@ def add_data_to_table(table, data, token):
     print("Add status:", resp.status_code, resp.text)
     retries += 1
 
-    if resp.status_code == 200:
+    if resp.status_code == 201:
       print(f"Success. Exiting...")
       break
 
