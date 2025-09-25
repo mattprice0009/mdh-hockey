@@ -102,12 +102,22 @@ def match_fantrax_player_to_nhl_player(row):
 
 def download_fantrax_csv():
   headers = { 'Cookie': FANTRAX_LOGIN_COOKIE}
-  player_data = requests.get(FANTRAX_EXPORT_URL, headers=headers).text
+  player_data = requests.get(FANTRAX_EXPORT_URL, headers=headers)
+
+  # TODO: This is hideous, but I don't feel like fixing it.
+  # The goal is IFF the player_data is in json format, print the error text
+  # But if it's not in JSON format it's good and we want to use the .text below
+  try:
+    print(player_data.json()["pageError"]["text"])
+    quit()
+  except:
+    pass
+    
 
   if not os.path.exists(INPUTS_DIR):
     os.mkdir(INPUTS_DIR)  # init directory
   with open(FANTRAX_EXPORT_FP, 'w') as csvfile:
-    csvfile.write(player_data)
+    csvfile.write(player_data.text)
 
 def load_fantrax_data_from_file():
   player_objs = []
