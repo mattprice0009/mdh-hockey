@@ -11,9 +11,10 @@ import os
 import re
 import requests
 import time
+from bs4 import BeautifulSoup
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
-from bs4 import BeautifulSoup
+from zoneinfo import ZoneInfo
 
 from mdhhockey.helpers import (_replace_special_chars, _acquire_azure_token)
 from mdhhockey.helpers import (
@@ -52,18 +53,6 @@ def match_fantrax_player_to_nhl_player(row):
     nhl_team = player[_K.TEAM_ABBREV]
     if nhl_team == None:
       nhl_team = "(N/A)"
-
-    # TODO: These are the names that this missed and why
-    # Elias Pettersson -- Two Elias Pettersons who play for the same team
-    # Calen Addison -- Recently traded from MIN to SJ
-    # Matthew Savoie -- Is Matt Savoie in NHL.com
-    # Will Smith -- Is William Smith in NHL.com
-    # Daniil But -- Is Danil But in NHL.com
-    # Casey DeSmith -- Incorrect team
-    # Nikita Okhotyuk -- Is Nikita Okhotiuk in NHL.com
-    # Ivan Prosvetov -- Team not updated from offseason trade
-    # Anthony Beauvilier -- Team not updated from in-season trade
-    # Vasili  Ponomarev -- Is Vasily Ponomarev on NHL.com
 
     confidence = 0.0
 
@@ -364,6 +353,7 @@ def generate_data_for_capfriendly():
 
   CONTRACTS_TABLE = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players'
   HITS_TABLE = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/tables/Hits'
+  SUMMARY_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/Summary'
 
   # TODO: Ensure we validate after these operations and retry if necessary
   contracts_range = get_existing_range(CONTRACTS_TABLE, token) # Get the range of the existing contracts to delete later
@@ -374,6 +364,14 @@ def generate_data_for_capfriendly():
   add_data_to_table(HITS_TABLE, caphit_data, token) # Add the players from our new object
   delete_old_range("All Penalties", hits_range, token) # Finally delete all the previous rows
   # END TODO
+
+  # Update the last updated timestamp
+  timestamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y/%m/%d %H:%M") + " EST"
+  resp = requests.patch(
+    f"{SUMMARY_SHEET}/range(address='A25')",
+    json={'values': [[timestamp]]},
+    headers={'Authorization': f'Bearer {token}'}
+  )
 
 if __name__ == '__main__':
   generate_data_for_capfriendly()
