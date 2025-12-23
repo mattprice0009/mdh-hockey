@@ -24,6 +24,7 @@ FANTRAX_LEAGUE_ID = '7ues8jxvm9n3hdb3'
 FANTRAX_LEAGUE_URL = f"https://www.fantrax.com/fxpa/req?leagueId={FANTRAX_LEAGUE_ID}"
 FANTRAX_EXPORT_URL = f'https://www.fantrax.com/fxpa/downloadPlayerStats?leagueId={FANTRAX_LEAGUE_ID}&pageNumber=1&view=STATS&positionOrGroup=ALL&sortType=SALARY&statusOrTeamFilter=ALL_TAKEN'
 FANTRAX_CAP_HITS_URL = f'https://www.fantrax.com/newui/fantasy/capHitPenaltyAdmin.go?leagueId={FANTRAX_LEAGUE_ID}'
+FANTRAX_DRAFT_PICKS_URL = f'https://www.fantrax.com/newui/fantasy/draftPicks.go?leagueId={FANTRAX_LEAGUE_ID}'
 FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
 
 # Map of fantrax page IDs to team abbreviations

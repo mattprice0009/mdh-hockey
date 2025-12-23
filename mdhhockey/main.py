@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 from mdhhockey.helpers import (_replace_special_chars, _acquire_azure_token)
 from mdhhockey.helpers import (
   _K, CACHE_DIR, CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_LEAGUE_URL, FANTRAX_EXPORT_URL, FANTRAX_CAP_HITS_URL,
-  FANTRAX_LOGIN_COOKIE, INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL, FANTRAX_TEAM_MAP
+  FANTRAX_LOGIN_COOKIE, INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL, FANTRAX_TEAM_MAP, FANTRAX_DRAFT_PICKS_URL
 )
 
 # Get basic league data from Fantrax that is used globally
@@ -43,7 +43,7 @@ def match_fantrax_player_to_nhl_player(row):
 
   search = requests.get(f"{NHL_API_SEARCH_URL}{ft_name}").json()
   if len(search) == 0:
-    print(f"Search for {ft_name} returned empty list.")
+    print(f"ERROR: Search for {ft_name} returned empty list.")
     return "0"
 
   matches = []
@@ -85,7 +85,7 @@ def match_fantrax_player_to_nhl_player(row):
     return matches[0][0]
 
   # If we get here, we need help disambiguating
-  print(f"Trouble finding matches for {ft_name}.")
+  print(f"ERROR: Trouble finding matches for {ft_name}.")
 
   return None
 
@@ -97,7 +97,7 @@ def download_fantrax_csv():
   # The goal is IFF the player_data is in json format, print the error text
   # But if it's not in JSON format it's good and we want to use the .text below
   try:
-    print(player_data.json()["pageError"]["text"])
+    print("ERROR: " + player_data.json()["pageError"]["text"])
     quit()
   except:
     pass
@@ -199,10 +199,10 @@ def get_fantrax_to_nhl_ids_map(fantrax_data):
       try:
         fantrax_id_to_nhl_id = json.load(f)
       except:
-        print("Could not read cached json ids file")
+        print("ERROR: Could not read cached json ids file")
         return {}
   except:
-    print("Cache datafile not found")
+    print("ERROR: Cache datafile not found")
     return {}
 
   for row in fantrax_data:
@@ -219,7 +219,7 @@ def get_fantrax_to_nhl_ids_map(fantrax_data):
     with open(f"{CACHE_DIR}/player_ids.json", "w") as f:
       json.dump(fantrax_id_to_nhl_id, f)
   except:
-    print("Cache datafile not found")
+    print("ERROR: Cache datafile not found")
 
   return fantrax_id_to_nhl_id
 
@@ -229,19 +229,19 @@ def get_contract_data():
     download_fantrax_csv()
     fantrax_data = load_fantrax_data_from_file()
   except:
-    print("Failed to download data from Fantrax. Aborting.")
+    print("ERROR: Failed to download data from Fantrax. Aborting.")
     quit()
 
   # 2. Step through each Fantrax player and match them to their NHL.com ID, which is cached
   fantrax_id_to_nhl_id = get_fantrax_to_nhl_ids_map(fantrax_data)
   if fantrax_id_to_nhl_id == {}:
-    print("Failed to get NHL IDs. Aborting.")
+    print("ERROR: Failed to get NHL IDs. Aborting.")
     quit()
 
   # 3. merge together
   merged_data = merge_data(fantrax_data, fantrax_id_to_nhl_id)
   if len(merged_data) == 0:
-    print('Failed to get any data from Fantrax. Aborting.')
+    print('ERROR: Failed to get any data from Fantrax. Aborting.')
     quit()
 
   headers = [_K.PLAYER, _K.IR, _K.TEAM, _K.DOB, _K.AGE, _K.POSITION, _K.CONTRACT] + season_headers
@@ -268,6 +268,10 @@ def get_caphit_data():
       continue
 
     hit_val = int(tds[3].text.replace(",", ""))
+
+    if num_years == 0 and hit_val == 0:
+      print("ERROR: Hits need updating")
+
     player = tds[4].find("a").text if tds[4].find("a") else tds[5].text
     if "retain" in note or "retention" in note or "trade" in note:
       hit_type = "Retention"
@@ -290,11 +294,9 @@ def get_existing_range(table, token):
   # I have no clue why, but hitting this endpoint before the one I want to hit fixes my auth issues. I think it's a security bug, but /shrug
   resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
 
+  print("Getting existing range...")
   resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
-  print(resp.status_code)
-
-  if resp.status_code == 401:
-    print(resp.text)
+  print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
 
   addr_range = resp.json()['address']
   addr_range = addr_range.replace("A1", "A2")
@@ -313,11 +315,10 @@ def add_data_to_table(table, data, token):
       json={'values': data, 'index': None},
       headers={'Authorization': f'Bearer {token}'}
     )
-    print("Add status:", resp.status_code, resp.text)
+    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
     retries += 1
 
-    if resp.status_code == 201:
-      print(f"Success. Exiting...")
+    if resp.status_code < 300:
       break
 
 def delete_old_range(sheet, range, token):
@@ -331,14 +332,112 @@ def delete_old_range(sheet, range, token):
       json={'shift': 'Up'},
       headers={'Authorization': f'Bearer {token}'}
     )
-    print("Delete status:", resp.status_code, resp.text)
+    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
     retries += 1
 
-    if resp.status_code == 204:
-      print(f"Success. Exiting...")
+    if resp.status_code < 300:
       break
 
 #endregion
+
+def update_bid_grid(token):
+  print("Updating Bid Grid...")
+
+  headers = { 'Cookie': FANTRAX_LOGIN_COOKIE}
+
+  base_year = curr_year
+  if not is_offseason:
+    base_year += 1
+
+  # Set up the mapping
+  pick_map = {}
+  for team_id in FANTRAX_TEAM_MAP:
+    pick_map[team_id] = {base_year: [0]*5, base_year+1: [0]*5, base_year+2: [0]*5}
+
+  for year in range(base_year, base_year+3):
+    response_text = requests.get(FANTRAX_DRAFT_PICKS_URL + f"&season={year}&viewType=TEAM", headers=headers).text
+    soup = BeautifulSoup(response_text, 'html.parser')
+    pick_data = soup.find_all('div', {'class': 'draftResultsBlock'})
+
+    # Get the picks for each team in that year
+    for div in pick_data:
+      team_id = div.find('a')['href'].split("=")[-1]
+
+      for pick in div.find_all('tr')[1:]: # skip header
+        round = int(pick.find('td').text)
+        if round > 4:
+          break
+
+        pick_map[team_id][year][round] += 1
+
+  # Convert the map to a flat row/col array
+  rows = []
+  for team in pick_map:
+    row = [FANTRAX_TEAM_MAP[team]]
+
+    can_upgrade = False
+
+    # Four firsts and four seconds, at least one of each in current year and three of each in first two years
+    if pick_map[team][base_year][1] > 0 and pick_map[team][base_year][2] > 0 \
+    and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1]) >= 3 and (pick_map[team][base_year][2] + pick_map[team][base_year+1][2]) >= 3 \
+    and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1] + pick_map[team][base_year+2][1]) >= 4 and (pick_map[team][base_year][2] + pick_map[team][base_year+1][2] + pick_map[team][base_year+2][2]) >= 4:
+      row.append("Yes")
+      can_upgrade = True
+    else:
+      row.append("No")
+
+    # Four firsts, at least one in current year and three in first two years
+    if pick_map[team][base_year][1] > 0 \
+    and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1]) >= 3 \
+    and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1] + pick_map[team][base_year+2][1]) >= 4:
+      row.append("Yes")
+      can_upgrade = True
+    else:
+      row.append("Upgrade" if can_upgrade else "No")
+
+    # Two firsts, at least one in current year
+    if pick_map[team][base_year][1] > 0 and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1]) >= 2:
+      row.append("Yes")
+      can_upgrade = True
+    else:
+      row.append("Upgrade" if can_upgrade else "No")
+
+    # 1st round pick
+    if pick_map[team][base_year][1] > 0:
+      row.append("Yes")
+      can_upgrade = True
+    else:
+      row.append("Upgrade" if can_upgrade else "No")
+
+    # 2nd round pick
+    if pick_map[team][base_year][2] > 0:
+      row.append("Yes")
+      can_upgrade = True
+    else:
+      row.append("Upgrade" if can_upgrade else "No")
+
+    # 3rd round pick
+    if pick_map[team][base_year][3] > 0:
+      row.append("Yes")
+      can_upgrade = True
+    else:
+      row.append("Upgrade" if can_upgrade else "No")
+
+    # 4th round pick
+    if pick_map[team][base_year][4] > 0:
+      row.append("Yes")
+    else:
+      row.append("Upgrade" if can_upgrade else "No")
+
+    rows.append(row)
+
+  BID_GRID_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/Bid Grid'
+  resp = requests.patch(
+    f"{BID_GRID_SHEET}/range(address='A4:H21')",
+    json={'values': rows},
+    headers={'Authorization': f'Bearer {token}'}
+  )
+  print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
 
 def generate_data_for_capfriendly():
   contract_data = get_contract_data()
@@ -346,7 +445,7 @@ def generate_data_for_capfriendly():
 
   result = _acquire_azure_token()
   if "access_token" not in result:
-    print("Unable to get Azure access_token. Aboritng.")
+    print("ERROR: Unable to get Azure access_token. Aboritng.")
     quit()
 
   token = result["access_token"]
@@ -365,13 +464,17 @@ def generate_data_for_capfriendly():
   delete_old_range("All Penalties", hits_range, token) # Finally delete all the previous rows
   # END TODO
 
+  update_bid_grid(token)
+
   # Update the last updated timestamp
+  print("Updating last updated timestamp...")
   timestamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y/%m/%d %H:%M") + " EST"
   resp = requests.patch(
     f"{SUMMARY_SHEET}/range(address='A25')",
     json={'values': [[timestamp]]},
     headers={'Authorization': f'Bearer {token}'}
   )
+  print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
 
 if __name__ == '__main__':
   generate_data_for_capfriendly()
