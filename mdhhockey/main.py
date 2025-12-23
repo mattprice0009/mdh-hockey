@@ -464,6 +464,7 @@ def generate_data_for_capfriendly():
   delete_old_range("All Penalties", hits_range, token) # Finally delete all the previous rows
   # END TODO
 
+  # Update the bid grid for offseason planning
   update_bid_grid(token)
 
   # Update the last updated timestamp
@@ -475,6 +476,22 @@ def generate_data_for_capfriendly():
     headers={'Authorization': f'Bearer {token}'}
   )
   print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+
+  # check for violations
+  print("Checking for violations...")
+  resp = requests.get(f"{SUMMARY_SHEET}/usedRange", headers={"Authorization": f"Bearer {token}"})
+  print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+  
+  data = resp.json()["values"]
+  for n in range(2, 20):
+    if data[n][4] < data[3][15]:
+      print(f"ERROR: Roster Minimum Violation Found for team {data[n][1]}")
+    if data[n][5] < data[1][15]:
+      print(f"ERROR: Cap Floor Violation Found for team {data[n][1]}")
+    if data[n][7] > 6 or data[n][8] > data[8][15]:
+      print(f"ERROR: Retention Violation Found for team {data[n][1]}")
+    if data[n][11] > data[2][15]:
+      print(f"ERROR: Cap Ceiling Violation Found for team {data[n][1]}")
 
 if __name__ == '__main__':
   generate_data_for_capfriendly()
