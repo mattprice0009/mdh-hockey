@@ -378,9 +378,12 @@ def update_bid_grid(token):
     can_upgrade = False
 
     # Four firsts and four seconds, at least one of each in current year and three of each in first two years
-    if pick_map[team][base_year][1] > 0 and pick_map[team][base_year][2] > 0 \
-    and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1]) >= 3 and (pick_map[team][base_year][2] + pick_map[team][base_year+1][2]) >= 3 \
-    and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1] + pick_map[team][base_year+2][1]) >= 4 and (pick_map[team][base_year][2] + pick_map[team][base_year+1][2] + pick_map[team][base_year+2][2]) >= 4:
+    if pick_map[team][base_year][1] > 0 \
+    and (pick_map[team][base_year][2] > 0 or pick_map[team][base_year][1] > 1) \
+    and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1]) >= 3 \
+    and (pick_map[team][base_year][2] + pick_map[team][base_year+1][2] + pick_map[team][base_year][1] + pick_map[team][base_year+1][1] - 3) >= 3 \
+    and (pick_map[team][base_year][1] + pick_map[team][base_year+1][1] + pick_map[team][base_year+2][1]) >= 4 \
+    and (pick_map[team][base_year][2] + pick_map[team][base_year+1][2] + pick_map[team][base_year+2][2] + pick_map[team][base_year][1] + pick_map[team][base_year+1][1] + pick_map[team][base_year+2][1] - 4) >= 4:
       row.append("Yes")
       can_upgrade = True
     else:
