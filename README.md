@@ -26,3 +26,4 @@ To run the script, simply run `python main.py`.
 
 Once it's finished, the output CSV will be stored in the `OUTPUTS_DIR` path.
 
+There's a Fantrax cookie required to run this, unique to your user session. More info can be found in the config file.
