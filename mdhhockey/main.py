@@ -295,8 +295,14 @@ def get_existing_range(table, token):
   resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
 
   print("Getting existing range...")
-  resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
-  print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+  retries = 0
+  while retries < 5:
+    resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
+    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+    retries += 1
+
+    if resp.status_code < 300:
+      break
 
   addr_range = resp.json()['address']
   addr_range = addr_range.replace("A1", "A2")
@@ -307,9 +313,9 @@ def get_existing_range(table, token):
 def add_data_to_table(table, data, token):
   resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
 
+  print(f'Adding to {table.split("/")[-1]} table from CSV...')
   retries = 0
   while retries < 5:
-    print(f'Adding to {table.split("/")[-1]} table from CSV...')
     resp = requests.post(
       f"{table}/rows",
       json={'values': data, 'index': None},
@@ -324,9 +330,9 @@ def add_data_to_table(table, data, token):
 def delete_old_range(sheet, range, token):
   resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
 
+  print(f'Deleting existing {sheet} table...')
   retries = 0
   while retries < 5:
-    print(f'Deleting existing {sheet} table...')
     resp = requests.post(
       f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/{sheet}/range(address='{range}')/delete",
       json={'shift': 'Up'},
@@ -341,8 +347,6 @@ def delete_old_range(sheet, range, token):
 #endregion
 
 def update_bid_grid(token):
-  print("Updating Bid Grid...")
-
   headers = { 'Cookie': FANTRAX_LOGIN_COOKIE}
 
   base_year = curr_year
@@ -435,12 +439,20 @@ def update_bid_grid(token):
     rows.append(row)
 
   BID_GRID_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/Bid Grid'
-  resp = requests.patch(
-    f"{BID_GRID_SHEET}/range(address='A4:H21')",
-    json={'values': rows},
-    headers={'Authorization': f'Bearer {token}'}
-  )
-  print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+
+  print("Updating Bid Grid...")
+  retries = 0
+  while retries < 5:
+    resp = requests.patch(
+      f"{BID_GRID_SHEET}/range(address='A4:H21')",
+      json={'values': rows},
+      headers={'Authorization': f'Bearer {token}'}
+    )
+    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+    retries += 1
+
+    if resp.status_code < 300:
+      break
 
 def generate_data_for_capfriendly():
   contract_data = get_contract_data()
@@ -472,18 +484,30 @@ def generate_data_for_capfriendly():
 
   # Update the last updated timestamp
   print("Updating last updated timestamp...")
-  timestamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y/%m/%d %H:%M") + " EST"
-  resp = requests.patch(
-    f"{SUMMARY_SHEET}/range(address='A25')",
-    json={'values': [[timestamp]]},
-    headers={'Authorization': f'Bearer {token}'}
-  )
-  print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+  retries = 0
+  while retries < 5:
+    timestamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y/%m/%d %H:%M") + " EST"
+    resp = requests.patch(
+      f"{SUMMARY_SHEET}/range(address='A25')",
+      json={'values': [[timestamp]]},
+      headers={'Authorization': f'Bearer {token}'}
+    )
+    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+    retries += 1
+
+    if resp.status_code < 300:
+      break
 
   # check for violations
   print("Checking for violations...")
-  resp = requests.get(f"{SUMMARY_SHEET}/usedRange", headers={"Authorization": f"Bearer {token}"})
-  print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+  retries = 0
+  while retries < 5:
+    resp = requests.get(f"{SUMMARY_SHEET}/usedRange", headers={"Authorization": f"Bearer {token}"})
+    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+    retries += 1
+
+    if resp.status_code < 300:
+      break
   
   data = resp.json()["values"]
   for n in range(2, 20):
