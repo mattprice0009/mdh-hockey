@@ -290,19 +290,34 @@ def get_caphit_data():
 
 #endregion
 #region azure/excel functions
-def get_existing_range(table, token):
-  # I have no clue why, but hitting this endpoint before the one I want to hit fixes my auth issues. I think it's a security bug, but /shrug
-  resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
 
-  print("Getting existing range...")
+def request_with_retries(url, headers, method="GET", json=None,num_retries=5):
+  # I have no clue why, but hitting this endpoint before the one I want to hit fixes my auth issues. I think it's a security bug, but /shrug
+  resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers=headers)
+
   retries = 0
-  while retries < 5:
-    resp = requests.get(f"{table}/range", headers={'Authorization': f'Bearer {token}'})
-    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
+  while retries < num_retries:
+    if method == "GET":
+      resp = requests.get(url, headers=headers)
+    elif method == "POST":
+      resp = requests.post(url, headers=headers, json=json)
+    elif method == "PATCH":
+      resp = requests.patch(url, headers=headers, json=json)
+    else:
+      print(f"ERROR: Unsupported method {method} in request_with_retries")
+      quit()
+
     retries += 1
 
     if resp.status_code < 300:
       break
+
+  print(f"ERROR: {resp.status_code} from {url}" if resp.status_code >= 300 else resp.status_code)
+  return resp
+
+def get_existing_range(table, token):
+  print("Getting existing range...")
+  resp = request_with_retries(f"{table}/range", {'Authorization': f'Bearer {token}'})
 
   addr_range = resp.json()['address']
   addr_range = addr_range.replace("A1", "A2")
@@ -311,38 +326,12 @@ def get_existing_range(table, token):
   return addr_range
 
 def add_data_to_table(table, data, token):
-  resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
-
   print(f'Adding to {table.split("/")[-1]} table from CSV...')
-  retries = 0
-  while retries < 5:
-    resp = requests.post(
-      f"{table}/rows",
-      json={'values': data, 'index': None},
-      headers={'Authorization': f'Bearer {token}'}
-    )
-    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
-    retries += 1
-
-    if resp.status_code < 300:
-      break
+  request_with_retries(f"{table}/rows", {'Authorization': f'Bearer {token}'}, method="POST", json={'values': data, 'index': None})
 
 def delete_old_range(sheet, range, token):
-  resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers={"Authorization": f"Bearer {token}"})
-
   print(f'Deleting existing {sheet} table...')
-  retries = 0
-  while retries < 5:
-    resp = requests.post(
-      f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/{sheet}/range(address='{range}')/delete",
-      json={'shift': 'Up'},
-      headers={'Authorization': f'Bearer {token}'}
-    )
-    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
-    retries += 1
-
-    if resp.status_code < 300:
-      break
+  request_with_retries(f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/{sheet}/range(address='{range}')/delete", {'Authorization': f'Bearer {token}'}, method="POST", json={'shift': 'Up'})
 
 #endregion
 
@@ -441,18 +430,7 @@ def update_bid_grid(token):
   BID_GRID_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/Bid Grid'
 
   print("Updating Bid Grid...")
-  retries = 0
-  while retries < 5:
-    resp = requests.patch(
-      f"{BID_GRID_SHEET}/range(address='A4:H21')",
-      json={'values': rows},
-      headers={'Authorization': f'Bearer {token}'}
-    )
-    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
-    retries += 1
-
-    if resp.status_code < 300:
-      break
+  request_with_retries(f"{BID_GRID_SHEET}/range(address='A4:H21')", {'Authorization': f'Bearer {token}'}, method="PATCH", json={'values': rows})
 
 def generate_data_for_capfriendly():
   contract_data = get_contract_data()
@@ -484,31 +462,13 @@ def generate_data_for_capfriendly():
 
   # Update the last updated timestamp
   print("Updating last updated timestamp...")
-  retries = 0
-  while retries < 5:
-    timestamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y/%m/%d %H:%M") + " EST"
-    resp = requests.patch(
-      f"{SUMMARY_SHEET}/range(address='A25')",
-      json={'values': [[timestamp]]},
-      headers={'Authorization': f'Bearer {token}'}
-    )
-    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
-    retries += 1
-
-    if resp.status_code < 300:
-      break
+  timestamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y/%m/%d %H:%M") + " EST"
+  request_with_retries(f"{SUMMARY_SHEET}/range(address='A25')", {'Authorization': f'Bearer {token}'}, method="PATCH", json={'values': [[timestamp]]})
 
   # check for violations
   print("Checking for violations...")
-  retries = 0
-  while retries < 5:
-    resp = requests.get(f"{SUMMARY_SHEET}/usedRange", headers={"Authorization": f"Bearer {token}"})
-    print(f"ERROR: {resp.status_code}" if resp.status_code >= 300 else resp.status_code)
-    retries += 1
+  resp = request_with_retries(f"{SUMMARY_SHEET}/usedRange", {'Authorization': f'Bearer {token}'})
 
-    if resp.status_code < 300:
-      break
-  
   data = resp.json()["values"]
   for n in range(2, 20):
     if data[n][4] < data[3][15]:
