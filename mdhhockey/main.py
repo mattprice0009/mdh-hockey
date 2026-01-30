@@ -100,8 +100,7 @@ def download_fantrax_csv():
     print("ERROR: " + player_data.json()["pageError"]["text"])
     quit()
   except:
-    pass
-    
+    pass 
 
   if not os.path.exists(INPUTS_DIR):
     os.mkdir(INPUTS_DIR)  # init directory

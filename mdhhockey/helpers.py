@@ -22,7 +22,10 @@ FANTRAX_EXPORT_FP = f'{INPUTS_DIR}/fantrax_export_latest.csv'
 # We'll have to update the leagueId every year
 FANTRAX_LEAGUE_ID = '7ues8jxvm9n3hdb3'
 FANTRAX_LEAGUE_URL = f"https://www.fantrax.com/fxpa/req?leagueId={FANTRAX_LEAGUE_ID}"
-FANTRAX_EXPORT_URL = f'https://www.fantrax.com/fxpa/downloadPlayerStats?leagueId={FANTRAX_LEAGUE_ID}&pageNumber=1&view=STATS&positionOrGroup=ALL&sortType=SALARY&statusOrTeamFilter=ALL_TAKEN'
+FANTRAX_EXPORT_URL = f'https://www.fantrax.com/fxpa/downloadPlayerStats?leagueId={FANTRAX_LEAGUE_ID}&pageNumber=1&view=STATS&positionOrGroup=ALL' + \
+                     f'&seasonOrProjection=SEASON_31l_YEAR_TO_DATE&timeframeTypeCode=YEAR_TO_DATE&transactionPeriod=17&miscDisplayType=1&sortType=SALARY' + \
+                     f'&statusOrTeamFilter=ALL_TAKEN&scoringCategoryType=5&timeStartType=PERIOD_ONLY&schedulePageAdj=0&searchName=&datePlaying=ALL' + \
+                     f'&startDate=2025-10-07&endDate=2026-01-30'
 FANTRAX_CAP_HITS_URL = f'https://www.fantrax.com/newui/fantasy/capHitPenaltyAdmin.go?leagueId={FANTRAX_LEAGUE_ID}'
 FANTRAX_DRAFT_PICKS_URL = f'https://www.fantrax.com/newui/fantasy/draftPicks.go?leagueId={FANTRAX_LEAGUE_ID}'
 FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
