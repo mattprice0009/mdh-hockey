@@ -10,7 +10,6 @@ import json
 import os
 import re
 import requests
-import time
 from bs4 import BeautifulSoup
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
@@ -290,7 +289,13 @@ def get_caphit_data():
 #endregion
 #region azure/excel functions
 
-def request_with_retries(url, headers, method="GET", json=None,num_retries=5):
+def unprotect_sheet(sheet, token):
+  request_with_retries(f"{sheet}/protection/unprotect", {'Authorization': f'Bearer {token}'}, method="POST")
+
+def protect_sheet(sheet, token):
+  request_with_retries(f"{sheet}/protection/protect", {'Authorization': f'Bearer {token}'}, method="POST")
+
+def request_with_retries(url, headers, method="GET", json=None, num_retries=5):
   # I have no clue why, but hitting this endpoint before the one I want to hit fixes my auth issues. I think it's a security bug, but /shrug
   resp = requests.get(f"https://graph.microsoft.com/v1.0/me/drive/items/56555516577EABF8!64168/content", headers=headers)
 
@@ -353,6 +358,9 @@ def update_bid_grid(token):
 
     # Get the picks for each team in that year
     for div in pick_data:
+      if "Skipped Picks" in div.text:
+        continue
+
       team_id = div.find('a')['href'].split("=")[-1]
 
       for pick in div.find_all('tr')[1:]: # skip header
@@ -429,7 +437,9 @@ def update_bid_grid(token):
   BID_GRID_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/Bid Grid'
 
   print("Updating Bid Grid...")
+  unprotect_sheet(BID_GRID_SHEET, token)
   request_with_retries(f"{BID_GRID_SHEET}/range(address='A4:H21')", {'Authorization': f'Bearer {token}'}, method="PATCH", json={'values': rows})
+  protect_sheet(BID_GRID_SHEET, token)
 
 def generate_data_for_capfriendly():
   contract_data = get_contract_data()
@@ -442,42 +452,51 @@ def generate_data_for_capfriendly():
 
   token = result["access_token"]
 
-  CONTRACTS_TABLE = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts/tables/Players'
-  HITS_TABLE = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties/tables/Hits'
+  CONTRACTS_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Contracts'
+  CONTRACTS_TABLE = f'{CONTRACTS_SHEET}/tables/Players'
+  HITS_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/All Penalties'
+  HITS_TABLE = f'{HITS_SHEET}/tables/Hits'
   SUMMARY_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/Summary'
 
-  # TODO: Ensure we validate after these operations and retry if necessary
+  unprotect_sheet(CONTRACTS_SHEET, token)
   contracts_range = get_existing_range(CONTRACTS_TABLE, token) # Get the range of the existing contracts to delete later
   add_data_to_table(CONTRACTS_TABLE, contract_data, token) # Add the players from our new object
   delete_old_range("All Contracts", contracts_range, token) # Finally delete all the previous rows
+  protect_sheet(CONTRACTS_SHEET, token)
 
+  unprotect_sheet(HITS_SHEET, token)
   hits_range = get_existing_range(HITS_TABLE, token) # Get the range of the existing contracts to delete later
   add_data_to_table(HITS_TABLE, caphit_data, token) # Add the players from our new object
   delete_old_range("All Penalties", hits_range, token) # Finally delete all the previous rows
-  # END TODO
+  protect_sheet(HITS_SHEET, token)
 
   # Update the bid grid for offseason planning
   update_bid_grid(token)
 
   # Update the last updated timestamp
   print("Updating last updated timestamp...")
+  unprotect_sheet(SUMMARY_SHEET, token)
   timestamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y/%m/%d %H:%M") + " EST"
   request_with_retries(f"{SUMMARY_SHEET}/range(address='A25')", {'Authorization': f'Bearer {token}'}, method="PATCH", json={'values': [[timestamp]]})
+  protect_sheet(SUMMARY_SHEET, token)
 
   # check for violations
-  print("Checking for violations...")
-  resp = request_with_retries(f"{SUMMARY_SHEET}/usedRange", {'Authorization': f'Bearer {token}'})
+  if is_offseason:
+    print("Skipping violation checks for offseason")
+  else:
+    print("Checking for violations...")
+    resp = request_with_retries(f"{SUMMARY_SHEET}/usedRange", {'Authorization': f'Bearer {token}'})
 
-  data = resp.json()["values"]
-  for n in range(2, 20):
-    if data[n][4] < data[3][15]:
-      print(f"ERROR: Roster Minimum Violation Found for team {data[n][1]}")
-    if data[n][5] < data[1][15]:
-      print(f"ERROR: Cap Floor Violation Found for team {data[n][1]}")
-    if data[n][7] > 6 or data[n][8] > data[8][15]:
-      print(f"ERROR: Retention Violation Found for team {data[n][1]}")
-    if data[n][11] > data[2][15]:
-      print(f"ERROR: Cap Ceiling Violation Found for team {data[n][1]}")
+    data = resp.json()["values"]
+    for n in range(2, 20):
+      if data[n][4] < data[3][15]:
+        print(f"ERROR: Roster Minimum Violation Found for team {data[n][1]}")
+      if data[n][5] < data[1][15]:
+        print(f"ERROR: Cap Floor Violation Found for team {data[n][1]}")
+      if data[n][7] > 6 or data[n][8] > data[8][15]:
+        print(f"ERROR: Retention Violation Found for team {data[n][1]}")
+      if data[n][11] > data[2][15]:
+        print(f"ERROR: Cap Ceiling Violation Found for team {data[n][1]}")
 
 if __name__ == '__main__':
   generate_data_for_capfriendly()
