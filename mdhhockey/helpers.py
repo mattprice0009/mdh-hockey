@@ -30,6 +30,9 @@ FANTRAX_CAP_HITS_URL = f'https://www.fantrax.com/newui/fantasy/capHitPenaltyAdmi
 FANTRAX_DRAFT_PICKS_URL = f'https://www.fantrax.com/newui/fantasy/draftPicks.go?leagueId={FANTRAX_LEAGUE_ID}'
 FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
 
+# Discord Variables
+DISCORD_WEBHOOK_URL = config.get('discord', 'webhook_url', fallback='')
+
 # Map of fantrax page IDs to team abbreviations
 FANTRAX_TEAM_MAP = {
   "44z3lr4bmoafw8ba": "BAR",
