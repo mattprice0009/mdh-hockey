@@ -231,7 +231,7 @@ def tie_line(
     bidders = join_owners([format_owner(owner) for owner in tied_owners])
     owner = format_owner(player.owner)
     return (
-        f":siren: We have a tie! If {owner} decides to match, it ends there. "
+        f"\n<a:goalsiren:1354137595424014470> We have a tie! If {owner} decides to match, it ends there. "
         f"If {owner} does not match, then we will begin the tiebreaker process where "
         f"{bidders} bid again with no salary cap limit. Winner gets {player.name} at "
         f"{format_tie_salary(highest_salary)} and a has a \"Signing Bonus\" cap hit "
