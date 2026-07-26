@@ -11,11 +11,13 @@ import requests
 from extension_announcement import (
     AnnouncementError,
     ClaimBid,
+    DEFAULT_SHEET,
     normalized_name,
     parse_money,
 )
 
 TRANSACTION_LIMIT = 250
+POSTED_GROUP_CELL = "AB8"
 
 def fetch_sheet_values(sheet_name: str) -> list[list[Any]]:
     from mdhhockey.helpers import CAPFRIENDLY_GRAPH_URL_ROOT, _acquire_azure_token
@@ -39,6 +41,29 @@ def fetch_sheet_values(sheet_name: str) -> list[list[Any]]:
     if not isinstance(values, list):
         raise AnnouncementError(f"No values returned from worksheet {sheet_name!r}.")
     return values
+
+def update_posted_group(group: int) -> None:
+    """Record the most recently posted extension group in the workbook."""
+    from mdhhockey.helpers import CAPFRIENDLY_GRAPH_URL_ROOT, _acquire_azure_token
+
+    token_result = _acquire_azure_token()
+    token = token_result.get("access_token")
+    if not token:
+        detail = token_result.get("error_description", "no access token returned")
+        raise AnnouncementError(f"Microsoft authentication failed: {detail}")
+
+    encoded_sheet = quote(DEFAULT_SHEET, safe="")
+    url = (
+        f"{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/{encoded_sheet}"
+        f"/range(address='{POSTED_GROUP_CELL}')"
+    )
+    response = requests.patch(
+        url,
+        headers={"Authorization": f"Bearer {token}"},
+        json={"values": [[group]]},
+        timeout=30,
+    )
+    response.raise_for_status()
 
 def fetch_recent_claims(limit: int = TRANSACTION_LIMIT) -> dict[str, list[ClaimBid]]:
     from mdhhockey.helpers import (

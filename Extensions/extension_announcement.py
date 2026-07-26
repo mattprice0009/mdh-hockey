@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 DEFAULT_SHEET = "Extensions Research"
+DEFAULT_BID_GRID_SHEET = "Bid Grid"
 
 class AnnouncementError(RuntimeError):
     """An expected workbook or Fantrax value could not be read."""
@@ -33,6 +34,12 @@ class ClaimBid:
     salary: Decimal
     owner: str
 
+@dataclass(frozen=True)
+class CompensationTier:
+    picks: str
+    minimum: Decimal
+    maximum: Decimal | None
+
 def normalized_name(value: str) -> str:
     value = unicodedata.normalize("NFKD", value)
     value = "".join(char for char in value if not unicodedata.combining(char))
@@ -51,6 +58,63 @@ def format_money(value: Decimal) -> str:
 
 def format_years(years: int) -> str:
     return f"{years} {'year' if years == 1 else 'years'}"
+
+def parse_compensation_amount(value: Any) -> Decimal | None:
+    text = str(value).strip().upper().replace(",", "")
+    if text == "MAX":
+        return None
+    match = re.fullmatch(
+        r"\$?(\d+(?:\.\d+)?)\s*([KM])?(?:\s*\+\s*(\d+))?",
+        text,
+    )
+    if not match:
+        raise AnnouncementError(f"Invalid Bid Grid amount: {value!r}")
+    amount = Decimal(match.group(1))
+    multiplier = {
+        None: Decimal("1"),
+        "K": Decimal("1000"),
+        "M": Decimal("1000000"),
+    }[match.group(2)]
+    increment = Decimal(match.group(3) or "0")
+    return amount * multiplier + increment
+
+def parse_compensation_tiers(values: list[list[Any]]) -> list[CompensationTier]:
+    if len(values) < 3:
+        raise AnnouncementError("Bid Grid must contain Picks, Min $, and Max $ rows.")
+    tiers: list[CompensationTier] = []
+    width = max(len(row) for row in values[:3])
+    for column in range(1, width):
+        picks = str(values[0][column]).strip() if column < len(values[0]) else ""
+        if not picks:
+            continue
+        minimum_value = values[1][column] if column < len(values[1]) else ""
+        maximum_value = values[2][column] if column < len(values[2]) else ""
+        minimum = parse_compensation_amount(minimum_value)
+        maximum = parse_compensation_amount(maximum_value)
+        if minimum is None:
+            raise AnnouncementError(
+                f"Bid Grid minimum cannot be MAX for {picks!r}."
+            )
+        if maximum is not None and maximum < minimum:
+            raise AnnouncementError(
+                f"Bid Grid maximum is below minimum for {picks!r}."
+            )
+        tiers.append(CompensationTier(picks, minimum, maximum))
+    if not tiers:
+        raise AnnouncementError("No compensation tiers were found in Bid Grid.")
+    return tiers
+
+def compensation_for_salary(
+    salary: Decimal, tiers: list[CompensationTier]
+) -> str:
+    for tier in tiers:
+        if salary >= tier.minimum and (
+            tier.maximum is None or salary <= tier.maximum
+        ):
+            return tier.picks
+    raise AnnouncementError(
+        f"No Bid Grid compensation tier contains {format_money(salary)}."
+    )
 
 owner_map = {
     "2PRO": "<@313547033526927361>",
@@ -189,11 +253,16 @@ def highest_claim(
     return max((bid.salary for bid in bids), default=None)
 
 def matching_line(
-    player: Player, claims: dict[str, Decimal | list[ClaimBid]]
+    player: Player,
+    claims: dict[str, Decimal | list[ClaimBid]],
+    compensation_tiers: list[CompensationTier],
 ) -> str:
     claim_salary = highest_claim(player, claims)
     suffix = "" if claim_salary is not None else " (No bids, auto-matched)"
     salary = player.minimum_bid if claim_salary is None else claim_salary
+    if player.is_rfa and claim_salary is not None:
+        compensation = compensation_for_salary(salary, compensation_tiers)
+        suffix = f" ({compensation})"
     return (
         f"{format_owner(player.owner)} on {format_years(player.years)} of "
         f"{player.display_name} at {format_money(salary)}{suffix}"
@@ -239,10 +308,18 @@ def tie_line(
     )
 
 def build_announcement(
-    group: int, values: list[list[Any]], claims: dict[str, Decimal | list[ClaimBid]]
+    group: int,
+    values: list[list[Any]],
+    claims: dict[str, Decimal | list[ClaimBid]],
+    bid_grid_values: list[list[Any]] | None = None,
 ) -> str:
     current_players = players_for_group(values, group)
     previous_players = players_for_group(values, group - 1) if group > 1 else []
+    compensation_tiers = (
+        parse_compensation_tiers(bid_grid_values)
+        if bid_grid_values is not None
+        else []
+    )
 
     lines = [
         f"<@&483836819209715763> Group {group}! Each player listed includes their FA status "
@@ -260,7 +337,10 @@ def build_announcement(
             [
                 "",
                 "Matching decisions are required from:",
-                *(matching_line(player, claims) for player in previous_players),
+                *(
+                    matching_line(player, claims, compensation_tiers)
+                    for player in previous_players
+                ),
                 *(
                     alert
                     for player in previous_players

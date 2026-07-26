@@ -2,18 +2,21 @@ import unittest
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+import main as main_module
 from discord_webhook import (
     DISCORD_CONTENT_LIMIT,
     DiscordWebhookError,
     post_to_discord,
 )
-from extension_data import fetch_recent_claims
+from extension_data import fetch_recent_claims, update_posted_group
 from extension_announcement import (
     ClaimBid,
     build_announcement,
+    compensation_for_salary,
     format_money,
     format_owner,
     format_tie_salary,
+    parse_compensation_tiers,
     players_for_group,
 )
 from main import parse_args
@@ -29,6 +32,11 @@ VALUES = [
     ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "Groups", "F1", "F2", "D", "G"],
     ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 38, "Protas*", "Verhaeghe", "Carlson", ""],
     ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 39, "Sherwood", "Lehkonen", "Romanov*", ""],
+]
+BID_GRID_VALUES = [
+    ["Picks", "4x 1st, 4x 2nd", "4x 1st", "2x 1st", "1st", "2nd", "3rd", "4th"],
+    ["Min", "15M + 1", "12M + 1", "9M + 1", "6M + 1", "3M + 1", "1.5M + 1", "750k"],
+    ["Max", "MAX", "15M", "12M", "9M", "6M", "3M", "1.5M"],
 ]
 
 class AnnouncementTests(unittest.TestCase):
@@ -68,6 +76,31 @@ class AnnouncementTests(unittest.TestCase):
             output,
         )
 
+    def test_rfa_winning_bid_includes_compensation(self):
+        output = build_announcement(
+            39,
+            VALUES,
+            {"aliaksei protas": Decimal("3000001")},
+            BID_GRID_VALUES,
+        )
+        self.assertIn(
+            format_owner("WTM")
+            + " on 1 year of Aliaksei Protas* at "
+            + format_money(Decimal("3000001"))
+            + " (2nd)",
+            output,
+        )
+
+    def test_bid_grid_boundaries_are_inclusive(self):
+        tiers = parse_compensation_tiers(BID_GRID_VALUES)
+        self.assertEqual(compensation_for_salary(Decimal("750000"), tiers), "4th")
+        self.assertEqual(compensation_for_salary(Decimal("1500000"), tiers), "4th")
+        self.assertEqual(compensation_for_salary(Decimal("1500001"), tiers), "3rd")
+        self.assertEqual(
+            compensation_for_salary(Decimal("15000001"), tiers),
+            "4x 1st, 4x 2nd",
+        )
+
     def test_tie_alert_follows_matching_decisions(self):
         values = [
             ["Group", "Player", "Owner", "Start Bid"],
@@ -95,8 +128,9 @@ class AnnouncementTests(unittest.TestCase):
             f"{format_owner('DWM')}, and {format_owner('GetRekt')}"
         )
         self.assertEqual(
-            lines[matching_index + 1],
-            f":siren: We have a tie! If {format_owner('2PRO')} decides to "
+            lines[matching_index + 2],
+            f"<a:goalsiren:1354137595424014470> We have a tie! If "
+            f"{format_owner('2PRO')} decides to "
             f"match, it ends there. If {format_owner('2PRO')} does not match, "
             "then we will begin the tiebreaker process where "
             f"{bidders} bid again with no salary cap limit. Winner gets Connor "
@@ -105,6 +139,25 @@ class AnnouncementTests(unittest.TestCase):
         )
 
 class ExtensionDataTests(unittest.TestCase):
+    @patch("mdhhockey.helpers.CAPFRIENDLY_GRAPH_URL_ROOT", "https://graph.test/workbook")
+    @patch("mdhhockey.helpers._acquire_azure_token")
+    @patch("extension_data.requests.patch")
+    def test_updates_posted_group_cell(self, request_patch, acquire_token):
+        acquire_token.return_value = {"access_token": "excel-token"}
+        response = Mock()
+        request_patch.return_value = response
+
+        update_posted_group(39)
+
+        request_patch.assert_called_once_with(
+            "https://graph.test/workbook/worksheets/Extensions%20Research"
+            "/range(address='AB8')",
+            headers={"Authorization": "Bearer excel-token"},
+            json={"values": [[39]]},
+            timeout=30,
+        )
+        response.raise_for_status.assert_called_once_with()
+
     @patch("extension_data.requests.post")
     def test_transaction_history_includes_unexecuted_transactions(self, request_post):
         response = Mock()
@@ -208,6 +261,26 @@ class CommandLineTests(unittest.TestCase):
     def test_posting_is_opt_in(self):
         self.assertFalse(parse_args(["--group", "39"]).post)
         self.assertTrue(parse_args(["--group", "39", "--post"]).post)
+
+    @patch("main.update_posted_group")
+    @patch("main.post_to_discord")
+    @patch("main.build_announcement", return_value="Announcement")
+    @patch("main.fetch_recent_claims", return_value={})
+    @patch("main.fetch_sheet_values", side_effect=[VALUES, BID_GRID_VALUES])
+    def test_posting_records_group_in_excel(
+        self,
+        fetch_values,
+        fetch_claims,
+        build,
+        post,
+        update_group,
+    ):
+        update_group.side_effect = lambda group: self.assertTrue(post.called)
+        result = main_module.main(["--group", "39", "--post"])
+
+        self.assertEqual(result, 0)
+        post.assert_called_once_with("Announcement")
+        update_group.assert_called_once_with(39)
 
 if __name__ == "__main__":
     unittest.main()

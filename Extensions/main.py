@@ -10,8 +10,17 @@ from typing import Iterable
 import requests
 
 from discord_webhook import DiscordWebhookError, post_to_discord
-from extension_announcement import AnnouncementError, DEFAULT_SHEET, build_announcement
-from extension_data import fetch_recent_claims, fetch_sheet_values
+from extension_announcement import (
+    AnnouncementError,
+    DEFAULT_BID_GRID_SHEET,
+    DEFAULT_SHEET,
+    build_announcement,
+)
+from extension_data import (
+    fetch_recent_claims,
+    fetch_sheet_values,
+    update_posted_group,
+)
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -33,11 +42,15 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         values = fetch_sheet_values(args.sheet)
+        bid_grid_values = fetch_sheet_values(DEFAULT_BID_GRID_SHEET)
         claims = fetch_recent_claims()
-        announcement = build_announcement(args.group, values, claims)
+        announcement = build_announcement(
+            args.group, values, claims, bid_grid_values
+        )
         if args.post:
             post_to_discord(announcement)
-            print("Announcement posted to Discord.")
+            update_posted_group(args.group)
+            print("Announcement posted to Discord and group recorded in Excel.")
         else:
             print(announcement)
     except (AnnouncementError, DiscordWebhookError, requests.RequestException) as exc:
