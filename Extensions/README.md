@@ -1,10 +1,24 @@
 # Extension announcements
 
-Preview an announcement without posting it:
+Preview an announcement without posting it. Omit `--group` to use one more than the group recorded in worksheet cell AB8:
+
+```bash
+python Extensions/main.py
+```
+
+An explicit group still overrides AB8:
 
 ```bash
 python Extensions/main.py --group 39
 ```
+
+Process the previous group free-agent claims on Fantrax before previewing:
+
+```bash
+python Extensions/main.py --group 39 --process
+```
+
+`--process` is independent from `--post`, so both may be used together. Processing is destructive: the command aborts if any previous-group player already has an executed `ADD`, `CLAIM`, or `CLAIM - FA` transaction, or if Fantrax rejects the commissioner action.
 
 ## Discord webhook setup
 

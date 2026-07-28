@@ -8,8 +8,17 @@ from discord_webhook import (
     DiscordWebhookError,
     post_to_discord,
 )
-from extension_data import fetch_recent_claims, update_posted_group
+from extension_data import (
+    fetch_recent_claims,
+    infer_next_group,
+    update_posted_group,
+)
+from fantrax_processing import (
+    ensure_group_not_processed,
+    process_free_agent_claims,
+)
 from extension_announcement import (
+    AnnouncementError,
     ClaimBid,
     build_announcement,
     compensation_for_salary,
@@ -139,6 +148,17 @@ class AnnouncementTests(unittest.TestCase):
         )
 
 class ExtensionDataTests(unittest.TestCase):
+    def test_infers_next_group_from_ab8(self):
+        values = [[] for _ in range(8)]
+        values[7] = [""] * 28
+        values[7][27] = "38"
+
+        self.assertEqual(infer_next_group(values), 39)
+
+    def test_rejects_missing_ab8_group(self):
+        with self.assertRaisesRegex(AnnouncementError, "cell AB8"):
+            infer_next_group([])
+
     @patch("mdhhockey.helpers.CAPFRIENDLY_GRAPH_URL_ROOT", "https://graph.test/workbook")
     @patch("mdhhockey.helpers._acquire_azure_token")
     @patch("extension_data.requests.patch")
@@ -220,6 +240,92 @@ class ExtensionDataTests(unittest.TestCase):
             ],
         )
 
+class FantraxProcessingTests(unittest.TestCase):
+    def test_executed_acquisition_labels_block_previous_group(self):
+        previous_players = players_for_group(VALUES, 38)
+        for label in ("ADD", "Claim", "Claim - FA"):
+            rows = [
+                {
+                    "transactionCode": label,
+                    "executed": True,
+                    "deleted": False,
+                    "scorer": {"name": "Aliaksei Protas"},
+                    "cells": [],
+                }
+            ]
+
+            with self.subTest(label=label), self.assertRaisesRegex(
+                AnnouncementError, "already processed"
+            ):
+                ensure_group_not_processed(previous_players, rows)
+
+    def test_drop_and_pending_claim_do_not_block_processing(self):
+        previous_players = players_for_group(VALUES, 38)
+        rows = [
+            {
+                "transactionCode": "DROP",
+                "executed": True,
+                "deleted": False,
+                "scorer": {"name": "Aliaksei Protas"},
+                "cells": [],
+            },
+            {
+                "transactionCode": "CLAIM",
+                "executed": False,
+                "deleted": False,
+                "scorer": {"name": "John Carlson"},
+                "cells": [],
+            },
+        ]
+
+        ensure_group_not_processed(previous_players, rows)
+
+    def test_commissioner_error_uses_only_fake_session(self):
+        result_response = Mock()
+        result_response.json.return_value = {
+            "responses": [{"error": {"message": "Permission denied"}}]
+        }
+        session = Mock()
+        session.post.return_value = result_response
+        with self.assertRaisesRegex(AnnouncementError, "not be a commissioner"):
+            process_free_agent_claims(session)
+
+        session.post.assert_called_once()
+
+    def test_process_uses_only_the_fake_session(self):
+        result_response = Mock()
+        result_response.json.return_value = {
+            "responses": [{"data": {"success": True}}]
+        }
+        session = Mock()
+        session.post.return_value = result_response
+
+        process_free_agent_claims(session)
+
+        session.post.assert_called_once_with(
+            "https://www.fantrax.com/fxpa/req?leagueId=d7tktkommoafw8al",
+            json={
+                "msgs": [
+                    {
+                        "method": "executeCommissionerHubAction",
+                        "data": {"actionKey": "processFreeAgentClaims"},
+                    }
+                ],
+                "uiv": 3,
+                "refUrl": (
+                    "https://www.fantrax.com/fantasy/league/"
+                    "d7tktkommoafw8al/commissioner/hub"
+                    "#league-commissioner-hub-action-dialog"
+                ),
+                "dt": 1,
+                "at": 0,
+                "tz": "America/New_York",
+                "v": "184.2.4",
+            },
+            timeout=30,
+        )
+        result_response.raise_for_status.assert_called_once_with()
+
 class DiscordWebhookTests(unittest.TestCase):
     @patch("discord_webhook.DISCORD_WEBHOOK_URL", "https://discord.test/webhook")
     @patch("discord_webhook.requests.post")
@@ -258,29 +364,133 @@ class DiscordWebhookTests(unittest.TestCase):
         request_post.assert_not_called()
 
 class CommandLineTests(unittest.TestCase):
-    def test_posting_is_opt_in(self):
-        self.assertFalse(parse_args(["--group", "39"]).post)
-        self.assertTrue(parse_args(["--group", "39", "--post"]).post)
+    def test_posting_and_processing_are_independent_opt_ins(self):
+        inferred = parse_args([])
+        preview = parse_args(["--group", "39"])
+        processing = parse_args(["--group", "39", "--process"])
+        posting = parse_args(["--group", "39", "--post"])
+
+        self.assertIsNone(inferred.group)
+        self.assertFalse(preview.post)
+        self.assertFalse(preview.process)
+        self.assertTrue(processing.process)
+        self.assertFalse(processing.post)
+        self.assertTrue(posting.post)
+        self.assertFalse(posting.process)
 
     @patch("main.update_posted_group")
     @patch("main.post_to_discord")
-    @patch("main.build_announcement", return_value="Announcement")
-    @patch("main.fetch_recent_claims", return_value={})
+    @patch("main.build_announcement_for_players", return_value="Announcement")
+    @patch("main.claim_bids_from_transactions", return_value={})
+    @patch("main.fetch_transaction_rows", return_value=[])
     @patch("main.fetch_sheet_values", side_effect=[VALUES, BID_GRID_VALUES])
     def test_posting_records_group_in_excel(
         self,
         fetch_values,
-        fetch_claims,
+        fetch_transactions,
+        parse_claims,
         build,
         post,
         update_group,
     ):
         update_group.side_effect = lambda group: self.assertTrue(post.called)
+
         result = main_module.main(["--group", "39", "--post"])
 
         self.assertEqual(result, 0)
+        fetch_values.assert_has_calls([
+            unittest.mock.call("Extensions Research"),
+            unittest.mock.call("Bid Grid"),
+        ])
+        fetch_transactions.assert_called_once_with()
+        parse_claims.assert_called_once_with([])
+        build.assert_called_once()
         post.assert_called_once_with("Announcement")
         update_group.assert_called_once_with(39)
+
+    @patch("main.update_posted_group")
+    @patch("main.post_to_discord")
+    @patch("main.process_free_agent_claims")
+    @patch("main.fantrax_session")
+    @patch("main.ensure_group_not_processed")
+    @patch("main.build_announcement_for_players", return_value="Announcement")
+    @patch("main.claim_bids_from_transactions", return_value={})
+    @patch("main.fetch_transaction_rows", return_value=[])
+    @patch("main.players_for_group", side_effect=[["current"], ["previous"]])
+    @patch("main.fetch_sheet_values", side_effect=[VALUES, BID_GRID_VALUES])
+    def test_processing_refreshes_transactions_before_discord(
+        self,
+        fetch_values,
+        parse_group,
+        fetch_transactions,
+        parse_claims,
+        build,
+        guard,
+        session_factory,
+        process,
+        post,
+        update_group,
+    ):
+        events = []
+        session = Mock()
+        session_factory.return_value.__enter__.return_value = session
+        fetch_transactions.side_effect = [
+            ["before-processing"],
+            ["after-processing"],
+        ]
+        guard.side_effect = lambda players, rows: events.append("validated")
+        process.side_effect = lambda active_session: events.append("processed")
+        post.side_effect = lambda announcement: events.append("posted")
+        update_group.side_effect = lambda group: events.append("recorded")
+
+        result = main_module.main(["--group", "39", "--process", "--post"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(events, ["validated", "processed", "posted", "recorded"])
+        self.assertEqual(fetch_values.call_count, 2)
+        self.assertEqual(parse_group.call_count, 2)
+        self.assertEqual(fetch_transactions.call_count, 2)
+        parse_claims.assert_called_once_with(["after-processing"])
+        guard.assert_called_once_with(["previous"], ["before-processing"])
+        process.assert_called_once_with(session)
+
+    @patch("main.update_posted_group")
+    @patch("main.post_to_discord")
+    @patch("main.process_free_agent_claims")
+    @patch("main.fantrax_session")
+    @patch(
+        "main.ensure_group_not_processed",
+        side_effect=AnnouncementError("already processed"),
+    )
+    @patch("main.build_announcement_for_players", return_value="Announcement")
+    @patch("main.claim_bids_from_transactions", return_value={})
+    @patch("main.fetch_transaction_rows", return_value=[])
+    @patch("main.players_for_group", side_effect=[["current"], ["previous"]])
+    @patch("main.fetch_sheet_values", side_effect=[VALUES, BID_GRID_VALUES])
+    def test_duplicate_guard_prevents_all_mutations(
+        self,
+        fetch_values,
+        parse_group,
+        fetch_transactions,
+        parse_claims,
+        build,
+        guard,
+        session_factory,
+        process,
+        post,
+        update_group,
+    ):
+        result = main_module.main(["--group", "39", "--process", "--post"])
+
+        self.assertEqual(result, 1)
+        guard.assert_called_once_with(["previous"], [])
+        session_factory.assert_not_called()
+        process.assert_not_called()
+        fetch_transactions.assert_called_once_with()
+        parse_claims.assert_not_called()
+        build.assert_not_called()
+        post.assert_not_called()
+        update_group.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()

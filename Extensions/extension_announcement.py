@@ -315,6 +315,22 @@ def build_announcement(
 ) -> str:
     current_players = players_for_group(values, group)
     previous_players = players_for_group(values, group - 1) if group > 1 else []
+    return build_announcement_for_players(
+        group,
+        current_players,
+        previous_players,
+        claims,
+        bid_grid_values,
+    )
+
+def build_announcement_for_players(
+    group: int,
+    current_players: list[Player],
+    previous_players: list[Player],
+    claims: dict[str, Decimal | list[ClaimBid]],
+    bid_grid_values: list[list[Any]] | None = None,
+) -> str:
+    """Build an announcement from player groups parsed by the caller."""
     compensation_tiers = (
         parse_compensation_tiers(bid_grid_values)
         if bid_grid_values is not None

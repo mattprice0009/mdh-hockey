@@ -18,6 +18,25 @@ from extension_announcement import (
 
 TRANSACTION_LIMIT = 250
 POSTED_GROUP_CELL = "AB8"
+POSTED_GROUP_ROW = 7
+POSTED_GROUP_COLUMN = 27
+
+def infer_next_group(values: list[list[Any]]) -> int:
+    """Return one more than the group recorded in worksheet cell AB8."""
+    try:
+        posted_group = int(values[POSTED_GROUP_ROW][POSTED_GROUP_COLUMN])
+    except (IndexError, TypeError, ValueError) as exc:
+        raise AnnouncementError(
+            "Could not infer --group because worksheet cell AB8 does not "
+            "contain a valid group number."
+        ) from exc
+    next_group = posted_group + 1
+    if next_group < 1:
+        raise AnnouncementError(
+            "Could not infer --group because worksheet cell AB8 contains "
+            f"an invalid group number: {posted_group}."
+        )
+    return next_group
 
 def fetch_sheet_values(sheet_name: str) -> list[list[Any]]:
     from mdhhockey.helpers import CAPFRIENDLY_GRAPH_URL_ROOT, _acquire_azure_token
