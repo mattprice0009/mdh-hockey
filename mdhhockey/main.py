@@ -478,6 +478,8 @@ def generate_data_for_capfriendly():
   unprotect_sheet(SUMMARY_SHEET, token)
   timestamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y/%m/%d %H:%M") + " EST"
   request_with_retries(f"{SUMMARY_SHEET}/range(address='A25')", {'Authorization': f'Bearer {token}'}, method="PATCH", json={'values': [[timestamp]]})
+  print("Sorting Summary by cap space...")
+  request_with_retries(f"{SUMMARY_SHEET}/range(address='A2:L20')/sort/apply", {'Authorization': f'Bearer {token}'}, method="POST", json={'fields': [{'key': 11, 'ascending': False}], 'hasHeaders': True})
   protect_sheet(SUMMARY_SHEET, token)
 
   # check for violations
