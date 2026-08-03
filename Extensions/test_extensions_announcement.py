@@ -116,12 +116,17 @@ class AnnouncementTests(unittest.TestCase):
             bid_grid,
         )
 
-        self.assertIn(
+        warning = (
             f"⚠️ Bid Grid: {format_owner('WRINGS')}'s "
             f"{format_money(Decimal('3000001'))} bid "
-            "on Aliaksei Protas requires 2nd compensation, but their entry is No.",
-            output,
+            "on Aliaksei Protas requires 2nd compensation, but their entry is No."
         )
+        lines = output.splitlines()
+        winning_bid_index = lines.index(
+            f"{format_owner('WTM')} on 1 year of Aliaksei Protas* at "
+            f"{format_money(Decimal('3000001'))} (2nd)"
+        )
+        self.assertEqual(lines[winning_bid_index + 1], warning)
 
     def test_losing_bid_grid_issue_is_not_flagged(self):
         bid_grid = BID_GRID_VALUES + [

@@ -395,12 +395,12 @@ def bid_grid_alerts(
         )
         if decision.status == "no":
             alerts.append(
-                f"⚠️ Bid Grid: {bid_description} requires "
+                f"⚠️ {bid_description} requires "
                 f"{decision.original.picks} compensation, but their entry is No."
             )
         elif decision.status == "upgrade":
             alerts.append(
-                f"⚠️ Bid Grid: {bid_description} upgrades compensation from "
+                f"⚠️ {bid_description} upgrades compensation from "
                 f"{decision.original.picks} to {decision.effective.picks} "
                 "(the next Yes)."
             )
@@ -438,7 +438,7 @@ def tie_line(
     bidders = join_owners([format_owner(owner) for owner in tied_owners])
     owner = format_owner(player.owner)
     return (
-        f"\n<a:goalsiren:1354137595424014470> We have a tie! If {owner} decides to match, it ends there. "
+        f"\n🚨 We have a tie! If {owner} decides to match, it ends there. "
         f"If {owner} does not match, then we will begin the tiebreaker process where "
         f"{bidders} bid again with no salary cap limit. Winner gets {player.name} at "
         f"{format_tie_salary(highest_salary)} and a has a \"Signing Bonus\" cap hit "
@@ -487,19 +487,19 @@ def build_announcement_for_players(
     ]
 
     if previous_players:
+        matching_lines = [
+            line
+            for player in previous_players
+            for line in (
+                matching_line(player, claims, bid_grid),
+                *bid_grid_alerts(player, claims, bid_grid),
+            )
+        ]
         lines.extend(
             [
                 "",
                 "Matching decisions are required from:",
-                *(
-                    matching_line(player, claims, bid_grid)
-                    for player in previous_players
-                ),
-                *(
-                    alert
-                    for player in previous_players
-                    for alert in bid_grid_alerts(player, claims, bid_grid)
-                ),
+                *matching_lines,
                 *(
                     alert
                     for player in previous_players
