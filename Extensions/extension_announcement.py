@@ -11,6 +11,8 @@ from typing import Any
 
 DEFAULT_SHEET = "Extensions Research"
 DEFAULT_BID_GRID_SHEET = "Bid Grid"
+BID_GRID_ROW_LIMIT = 21
+BID_GRID_COLUMN_LIMIT = 8
 
 class AnnouncementError(RuntimeError):
     """An expected workbook or Fantrax value could not be read."""
@@ -39,6 +41,17 @@ class CompensationTier:
     picks: str
     minimum: Decimal
     maximum: Decimal | None
+
+@dataclass(frozen=True)
+class BidGrid:
+    tiers: list[CompensationTier]
+    availability: dict[str, tuple[str, ...]]
+
+@dataclass(frozen=True)
+class BidGridDecision:
+    original: CompensationTier
+    effective: CompensationTier
+    status: str
 
 def normalized_name(value: str) -> str:
     value = unicodedata.normalize("NFKD", value)
@@ -104,6 +117,37 @@ def parse_compensation_tiers(values: list[list[Any]]) -> list[CompensationTier]:
         raise AnnouncementError("No compensation tiers were found in Bid Grid.")
     return tiers
 
+def parse_bid_grid(values: list[list[Any]]) -> BidGrid:
+    """Parse compensation tiers and manager availability from A1:H21."""
+    grid_values = [
+        row[:BID_GRID_COLUMN_LIMIT]
+        for row in values[:BID_GRID_ROW_LIMIT]
+    ]
+    tiers = parse_compensation_tiers(grid_values)
+    availability: dict[str, tuple[str, ...]] = {}
+    valid_statuses = {"yes", "no", "upgrade"}
+    for row in grid_values[3:]:
+        owner = str(row[0]).strip() if row else ""
+        if not owner:
+            continue
+        statuses = tuple(
+            str(row[column]).strip().casefold()
+            if column < len(row)
+            else ""
+            for column in range(1, len(tiers) + 1)
+        )
+        invalid = [
+            status
+            for status in statuses
+            if status and status not in valid_statuses
+        ]
+        if invalid:
+            raise AnnouncementError(
+                f"Invalid Bid Grid status for {owner!r}: {invalid[0]!r}."
+            )
+        availability[normalized_name(owner)] = statuses
+    return BidGrid(tiers, availability)
+
 def compensation_for_salary(
     salary: Decimal, tiers: list[CompensationTier]
 ) -> str:
@@ -114,6 +158,54 @@ def compensation_for_salary(
             return tier.picks
     raise AnnouncementError(
         f"No Bid Grid compensation tier contains {format_money(salary)}."
+    )
+
+def bid_grid_decision(
+    salary: Decimal, owner: str, bid_grid: BidGrid
+) -> BidGridDecision:
+    tier_index = next(
+        (
+            index
+            for index, tier in enumerate(bid_grid.tiers)
+            if salary >= tier.minimum
+            and (tier.maximum is None or salary <= tier.maximum)
+        ),
+        None,
+    )
+    if tier_index is None:
+        raise AnnouncementError(
+            f"No Bid Grid compensation tier contains {format_money(salary)}."
+        )
+
+    original = bid_grid.tiers[tier_index]
+    if not bid_grid.availability or not owner:
+        return BidGridDecision(original, original, "yes")
+
+    statuses = bid_grid.availability.get(normalized_name(owner))
+    if statuses is None:
+        raise AnnouncementError(
+            f"Bid Grid does not contain a manager row for {owner!r}."
+        )
+    status = statuses[tier_index]
+    if status == "yes":
+        return BidGridDecision(original, original, status)
+    if status == "no":
+        return BidGridDecision(original, original, status)
+    if status != "upgrade":
+        raise AnnouncementError(
+            f"Bid Grid status is blank for {owner!r} and {original.picks!r}."
+        )
+
+    for upgraded_index in range(tier_index - 1, -1, -1):
+        if statuses[upgraded_index] == "yes":
+            return BidGridDecision(
+                original,
+                bid_grid.tiers[upgraded_index],
+                status,
+            )
+    raise AnnouncementError(
+        f"Bid Grid says to upgrade {owner!r} from {original.picks!r}, "
+        "but no higher compensation tier is marked Yes."
     )
 
 owner_map = {
@@ -255,18 +347,64 @@ def highest_claim(
 def matching_line(
     player: Player,
     claims: dict[str, Decimal | list[ClaimBid]],
-    compensation_tiers: list[CompensationTier],
+    bid_grid: BidGrid,
 ) -> str:
-    claim_salary = highest_claim(player, claims)
+    bids = claim_bids(player, claims)
+    claim_salary = max((bid.salary for bid in bids), default=None)
     suffix = "" if claim_salary is not None else " (No bids, auto-matched)"
     salary = player.minimum_bid if claim_salary is None else claim_salary
     if player.is_rfa and claim_salary is not None:
-        compensation = compensation_for_salary(salary, compensation_tiers)
+        winning_owners = list(
+            dict.fromkeys(
+                bid.owner
+                for bid in bids
+                if bid.salary == claim_salary and bid.owner
+            )
+        )
+        compensation = compensation_for_salary(salary, bid_grid.tiers)
+        if len(winning_owners) == 1:
+            compensation = bid_grid_decision(
+                salary, winning_owners[0], bid_grid
+            ).effective.picks
         suffix = f" ({compensation})"
     return (
         f"{format_owner(player.owner)} on {format_years(player.years)} of "
         f"{player.display_name} at {format_money(salary)}{suffix}"
     )
+
+def bid_grid_alerts(
+    player: Player,
+    claims: dict[str, Decimal | list[ClaimBid]],
+    bid_grid: BidGrid,
+) -> list[str]:
+    if not player.is_rfa or not bid_grid.availability:
+        return []
+
+    alerts: list[str] = []
+    bids = claim_bids(player, claims)
+    highest_salary = max((bid.salary for bid in bids), default=None)
+    for bid in bids:
+        if bid.salary != highest_salary:
+            continue
+        if not bid.owner:
+            continue
+        decision = bid_grid_decision(bid.salary, bid.owner, bid_grid)
+        bidder = format_owner(bid.owner)
+        bid_description = (
+            f"{bidder}'s {format_money(bid.salary)} bid on {player.name}"
+        )
+        if decision.status == "no":
+            alerts.append(
+                f"⚠️ Bid Grid: {bid_description} requires "
+                f"{decision.original.picks} compensation, but their entry is No."
+            )
+        elif decision.status == "upgrade":
+            alerts.append(
+                f"⚠️ Bid Grid: {bid_description} upgrades compensation from "
+                f"{decision.original.picks} to {decision.effective.picks} "
+                "(the next Yes)."
+            )
+    return alerts
 
 def join_owners(owners: list[str]) -> str:
     if len(owners) == 2:
@@ -331,10 +469,10 @@ def build_announcement_for_players(
     bid_grid_values: list[list[Any]] | None = None,
 ) -> str:
     """Build an announcement from player groups parsed by the caller."""
-    compensation_tiers = (
-        parse_compensation_tiers(bid_grid_values)
+    bid_grid = (
+        parse_bid_grid(bid_grid_values)
         if bid_grid_values is not None
-        else []
+        else BidGrid([], {})
     )
 
     lines = [
@@ -354,8 +492,13 @@ def build_announcement_for_players(
                 "",
                 "Matching decisions are required from:",
                 *(
-                    matching_line(player, claims, compensation_tiers)
+                    matching_line(player, claims, bid_grid)
                     for player in previous_players
+                ),
+                *(
+                    alert
+                    for player in previous_players
+                    for alert in bid_grid_alerts(player, claims, bid_grid)
                 ),
                 *(
                     alert

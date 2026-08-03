@@ -25,6 +25,7 @@ from extension_announcement import (
     format_money,
     format_owner,
     format_tie_salary,
+    parse_bid_grid,
     parse_compensation_tiers,
     players_for_group,
 )
@@ -99,6 +100,97 @@ class AnnouncementTests(unittest.TestCase):
             + " (2nd)",
             output,
         )
+
+    def test_no_bid_grid_entry_is_flagged_for_winning_bid(self):
+        bid_grid = BID_GRID_VALUES + [
+            ["WRINGS", "Yes", "Yes", "Yes", "Yes", "No", "Yes", "Yes"],
+        ]
+        output = build_announcement(
+            39,
+            VALUES,
+            {
+                "aliaksei protas": [
+                    ClaimBid(Decimal("3000001"), "WRINGS"),
+                ]
+            },
+            bid_grid,
+        )
+
+        self.assertIn(
+            f"⚠️ Bid Grid: {format_owner('WRINGS')}'s "
+            f"{format_money(Decimal('3000001'))} bid "
+            "on Aliaksei Protas requires 2nd compensation, but their entry is No.",
+            output,
+        )
+
+    def test_losing_bid_grid_issue_is_not_flagged(self):
+        bid_grid = BID_GRID_VALUES + [
+            ["WRINGS", "Yes", "Yes", "Yes", "Yes", "No", "Yes", "Yes"],
+            ["EXP", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes"],
+        ]
+        output = build_announcement(
+            39,
+            VALUES,
+            {
+                "aliaksei protas": [
+                    ClaimBid(Decimal("3000001"), "WRINGS"),
+                    ClaimBid(Decimal("6000001"), "EXP"),
+                ]
+            },
+            bid_grid,
+        )
+
+        self.assertNotIn("⚠️ Bid Grid:", output)
+
+    def test_upgrade_increases_compensation_until_next_yes_and_flags_it(self):
+        bid_grid = BID_GRID_VALUES + [
+            [
+                "WRINGS",
+                "Yes",
+                "Yes",
+                "Yes",
+                "No",
+                "Upgrade",
+                "Yes",
+                "Yes",
+            ]
+        ]
+        output = build_announcement(
+            39,
+            VALUES,
+            {
+                "aliaksei protas": [
+                    ClaimBid(Decimal("3000001"), "WRINGS")
+                ]
+            },
+            bid_grid,
+        )
+
+        self.assertIn(
+            f"{format_owner('WTM')} on 1 year of Aliaksei Protas* at "
+            f"{format_money(Decimal('3000001'))} (2x 1st)",
+            output,
+        )
+        self.assertIn(
+            f"⚠️ Bid Grid: {format_owner('WRINGS')}'s "
+            f"{format_money(Decimal('3000001'))} bid "
+            "on Aliaksei Protas upgrades compensation from 2nd to 2x 1st "
+            "(the next Yes).",
+            output,
+        )
+
+    def test_bid_grid_parser_uses_only_a1_through_h21(self):
+        values = [row + ["Ignored column"] for row in BID_GRID_VALUES]
+        values.extend(
+            [["WRINGS", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes"]]
+        )
+        values.extend([["", "", "", "", "", "", "", ""]] * 17)
+        values.append(["Ignored row", "invalid"] * 4)
+
+        grid = parse_bid_grid(values)
+
+        self.assertEqual(len(grid.tiers), 7)
+        self.assertEqual(len(grid.availability), 1)
 
     def test_bid_grid_boundaries_are_inclusive(self):
         tiers = parse_compensation_tiers(BID_GRID_VALUES)
