@@ -101,6 +101,53 @@ class AnnouncementTests(unittest.TestCase):
             output,
         )
 
+    def test_owner_only_bid_is_auto_matched_without_rfa_compensation(self):
+        bid_grid = BID_GRID_VALUES + [
+            ['WRINGS', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes'],
+        ]
+        output = build_announcement(
+            39,
+            VALUES,
+            {
+                'aliaksei protas': [
+                    ClaimBid(Decimal('3000001'), 'WTM'),
+                ]
+            },
+            bid_grid,
+        )
+
+        self.assertIn(
+            format_owner('WTM') + ' on 1 year of Aliaksei Protas* at '
+            + format_money(Decimal('3000001'))
+            + ' (No bids, auto-matched)',
+            output,
+        )
+        self.assertNotIn('⚠️', output)
+
+    def test_owner_winning_multiple_bids_is_not_auto_matched(self):
+        output = build_announcement(
+            39,
+            VALUES,
+            {
+                'carter verhaeghe': [
+                    ClaimBid(Decimal('3000001'), 'WTM'),
+                    ClaimBid(Decimal('6000001'), 'EXP'),
+                ]
+            },
+        )
+
+        self.assertIn(
+            format_owner('EXP') + ' on 6 years of Carter Verhaeghe at '
+            + format_money(Decimal('6000001')),
+            output,
+        )
+        self.assertNotIn(
+            'Carter Verhaeghe at '
+            + format_money(Decimal('6000001'))
+            + ' (No bids, auto-matched)',
+            output,
+        )
+
     def test_no_bid_grid_entry_is_flagged_for_winning_bid(self):
         bid_grid = BID_GRID_VALUES + [
             ["WRINGS", "Yes", "Yes", "Yes", "Yes", "No", "Yes", "Yes"],

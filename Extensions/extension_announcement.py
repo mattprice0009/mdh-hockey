@@ -344,6 +344,12 @@ def highest_claim(
     bids = claim_bids(player, claims)
     return max((bid.salary for bid in bids), default=None)
 
+def is_owner_only_bid(player: Player, bids: list[ClaimBid]) -> bool:
+    return (
+        len(bids) == 1
+        and normalized_name(bids[0].owner) == normalized_name(player.owner)
+    )
+
 def matching_line(
     player: Player,
     claims: dict[str, Decimal | list[ClaimBid]],
@@ -351,9 +357,10 @@ def matching_line(
 ) -> str:
     bids = claim_bids(player, claims)
     claim_salary = max((bid.salary for bid in bids), default=None)
-    suffix = "" if claim_salary is not None else " (No bids, auto-matched)"
+    auto_matched = claim_salary is None or is_owner_only_bid(player, bids)
+    suffix = " (No bids, auto-matched)" if auto_matched else ""
     salary = player.minimum_bid if claim_salary is None else claim_salary
-    if player.is_rfa and claim_salary is not None:
+    if player.is_rfa and claim_salary is not None and not auto_matched:
         winning_owners = list(
             dict.fromkeys(
                 bid.owner
@@ -382,6 +389,8 @@ def bid_grid_alerts(
 
     alerts: list[str] = []
     bids = claim_bids(player, claims)
+    if is_owner_only_bid(player, bids):
+        return []
     highest_salary = max((bid.salary for bid in bids), default=None)
     for bid in bids:
         if bid.salary != highest_salary:
