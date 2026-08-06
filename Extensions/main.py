@@ -65,7 +65,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "--process requires a group with a preceding group."
             )
         bid_grid_values = fetch_sheet_values(DEFAULT_BID_GRID_SHEET)
-        current_players = players_for_group(values, group)
+        current_players = players_for_group(values, group, allow_empty=True)
         previous_players = (
             players_for_group(values, group - 1)
             if group > 1

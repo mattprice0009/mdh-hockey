@@ -257,7 +257,9 @@ def parse_player_row(row: list[Any]) -> Player:
         is_rfa="(RFA)" in details[3].upper(),
     )
 
-def players_for_group(values: list[list[Any]], group: int) -> list[Player]:
+def players_for_group(
+    values: list[list[Any]], group: int, *, allow_empty: bool = False
+) -> list[Player]:
     players: list[Player] = []
     for row in values[1:]:
         if not row:
@@ -269,7 +271,7 @@ def players_for_group(values: list[list[Any]], group: int) -> list[Player]:
         if row_group == group:
             players.append(parse_player_row(row))
 
-    if not players:
+    if not players and not allow_empty:
         raise AnnouncementError(f"Group {group} was not found in {DEFAULT_SHEET!r}.")
     return order_players(values, group, players)
 
@@ -478,22 +480,28 @@ def build_announcement_for_players(
     bid_grid_values: list[list[Any]] | None = None,
 ) -> str:
     """Build an announcement from player groups parsed by the caller."""
+    if not current_players and not previous_players:
+        raise AnnouncementError("No current or previous group players were found.")
+
     bid_grid = (
         parse_bid_grid(bid_grid_values)
         if bid_grid_values is not None
         else BidGrid([], {})
     )
 
-    lines = [
-        f"<@&483836819209715763> Group {group}! Each player listed includes their FA status "
-        "(RFAs denoted with the * symbol), position, extension term, and minimum bid. "
-        "All this info, plus info on upcoming groups, can be found on the CapFriendly "
-        "under the Extensions Research tab.",
-        "",
-        *(player_line(player) for player in current_players),
-        "",
-        "React with a 👍 once you've wined and dined all players who interest you.",
-    ]
+    if current_players:
+        lines = [
+            f"<@&483836819209715763> Group {group}! Each player listed includes their FA status "
+            "(RFAs denoted with the * symbol), position, extension term, and minimum bid. "
+            "All this info, plus info on upcoming groups, can be found on the CapFriendly "
+            "under the Extensions Research tab.",
+            "",
+            *(player_line(player) for player in current_players),
+            "",
+            "React with a 👍 once you've wined and dined all players who interest you.",
+        ]
+    else:
+        lines = [f"<@&483836819209715763> Group {group - 1} results!"]
 
     if previous_players:
         matching_lines = [

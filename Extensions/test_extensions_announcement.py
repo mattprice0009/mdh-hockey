@@ -21,6 +21,7 @@ from extension_announcement import (
     AnnouncementError,
     ClaimBid,
     build_announcement,
+    build_announcement_for_players,
     compensation_for_salary,
     format_money,
     format_owner,
@@ -56,6 +57,10 @@ class AnnouncementTests(unittest.TestCase):
             ["Kiefer Sherwood", "Artturi Lehkonen", "Alexander Romanov"],
         )
 
+    def test_missing_group_remains_an_error_by_default(self):
+        with self.assertRaisesRegex(AnnouncementError, "Group 40 was not found"):
+            players_for_group(VALUES, 40)
+
     def test_money_rounds_half_up(self):
         self.assertEqual(format_money(Decimal("3015153.5")), "$3,015,154")
 
@@ -85,6 +90,24 @@ class AnnouncementTests(unittest.TestCase):
             + " (No bids, auto-matched)",
             output,
         )
+
+    def test_final_group_results_do_not_include_an_empty_next_group(self):
+        previous_players = players_for_group(VALUES, 39)
+
+        output = build_announcement_for_players(
+            40,
+            [],
+            previous_players,
+            {},
+            BID_GRID_VALUES,
+        )
+
+        self.assertTrue(
+            output.startswith("<@&483836819209715763> Group 39 results!")
+        )
+        self.assertIn("Matching decisions are required from:", output)
+        self.assertNotIn("Group 40!", output)
+        self.assertNotIn("wined and dined", output)
 
     def test_rfa_winning_bid_includes_compensation(self):
         output = build_announcement(
@@ -551,6 +574,43 @@ class CommandLineTests(unittest.TestCase):
         build.assert_called_once()
         post.assert_called_once_with("Announcement")
         update_group.assert_called_once_with(39)
+
+    @patch("main.update_posted_group")
+    @patch("main.post_to_discord")
+    @patch("main.build_announcement_for_players", return_value="Final results")
+    @patch("main.claim_bids_from_transactions", return_value={})
+    @patch("main.fetch_transaction_rows", return_value=[])
+    @patch("main.players_for_group", side_effect=[[], ["last group"]])
+    @patch("main.fetch_sheet_values", side_effect=[VALUES, BID_GRID_VALUES])
+    def test_posts_last_group_results_when_next_group_is_empty(
+        self,
+        fetch_values,
+        parse_group,
+        fetch_transactions,
+        parse_claims,
+        build,
+        post,
+        update_group,
+    ):
+        result = main_module.main(["--group", "40", "--post"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            parse_group.call_args_list,
+            [
+                unittest.mock.call(VALUES, 40, allow_empty=True),
+                unittest.mock.call(VALUES, 39),
+            ],
+        )
+        build.assert_called_once_with(
+            40,
+            [],
+            ["last group"],
+            {},
+            BID_GRID_VALUES,
+        )
+        post.assert_called_once_with("Final results")
+        update_group.assert_called_once_with(40)
 
     @patch("main.update_posted_group")
     @patch("main.post_to_discord")
