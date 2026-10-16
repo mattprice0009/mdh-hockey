@@ -14,7 +14,7 @@ else
     exit 1
 fi
 
-echo "pre-push: validating setup.py and requirements.txt"
+echo "pre-push: validating requirements.txt against project imports"
 "$python_command" scripts/sync_requirements.py --check
 
 echo "pre-push: running lineup tests"
