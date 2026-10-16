@@ -5,4 +5,7 @@ MAILTO=""
 # m h dom mon dow user command
 
 # MDH CapFriendly updater -- runs every hour, most notably after waivers processes (12:01pm EST)
-01 * * * *     root      /home/jeremy/mdh-hockey/run_mdh.sh >> /home/jeremy/mdh-hockey/cronjob.log 2>&1
+01 * * * *     root      /home/jeremy/mdh-hockey/run_mdh.sh >> /home/jeremy/mdh-hockey/CapFriendly/capfriendly.log 2>&1
+
+# RosterCop -- poll the league schedule and check lineups one hour before the first game
+*/30 * * * * root /usr/bin/flock -n /run/lock/lineup-check.lock /home/jeremy/mdh-hockey/mdh.venv/bin/python /home/jeremy/mdh-hockey/LineupCheck/check_lineups.py >> /home/jeremy/mdh-hockey/LineupCheck/lineup_check.log 2>&1
