@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repository_root="$(git rev-parse --show-toplevel)"
+cd "$repository_root"
+
+if [[ -x "$repository_root/mdh.venv/bin/python" ]]; then
+    python_command="$repository_root/mdh.venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+    python_command="$(command -v python3)"
+else
+    echo "pre-push: Python 3 was not found." >&2
+    exit 1
+fi
+
+echo "pre-push: validating setup.py and requirements.txt"
+"$python_command" scripts/sync_requirements.py --check
+
+echo "pre-push: running lineup tests"
+"$python_command" -m unittest discover --start-directory LineupCheck --verbose
+
+echo "pre-push: running extension tests"
+"$python_command" -m unittest discover --start-directory Extensions --verbose
