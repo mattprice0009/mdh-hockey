@@ -15,13 +15,16 @@ import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Iterable
 
 import requests
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from extension_announcement import DEFAULT_SHEET, Player, parse_player_row
 from extension_data import fetch_sheet_values
-from mdhhockey.helpers import (
+from helpers import (
     FANTRAX_LEAGUE_ID,
     FANTRAX_LOGIN_COOKIE,
 )

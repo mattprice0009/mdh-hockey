@@ -10,13 +10,17 @@ import json
 import os
 import re
 import requests
+import sys
 from bs4 import BeautifulSoup
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from mdhhockey.helpers import (_replace_special_chars, _acquire_azure_token)
-from mdhhockey.helpers import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from helpers import (_replace_special_chars, _acquire_azure_token)
+from helpers import (
   _K, CACHE_DIR, CAPFRIENDLY_GRAPH_URL_ROOT, FANTRAX_EXPORT_FP, FANTRAX_LEAGUE_URL, FANTRAX_EXPORT_URL, FANTRAX_CAP_HITS_URL,
   FANTRAX_LOGIN_COOKIE, INPUTS_DIR, NHL_API_BASE_URL, NHL_API_SEARCH_URL, FANTRAX_TEAM_MAP, FANTRAX_DRAFT_PICKS_URL
 )
@@ -203,6 +207,14 @@ def get_fantrax_to_nhl_ids_map(fantrax_data):
     print("ERROR: Cache datafile not found")
     return {}
 
+  # Apply manual overrides for players unavailable through the NHL API.
+  try:
+    with open(os.path.join(os.path.dirname(__file__), "playeroverrides.json"), "r") as f:
+      fantrax_id_to_nhl_id.update(json.load(f))
+  except (OSError, json.JSONDecodeError):
+    print("ERROR: Could not read player overrides")
+    return {}
+
   for row in fantrax_data:
     fantrax_id = row[_K.ID]
     if fantrax_id not in fantrax_id_to_nhl_id:
@@ -341,10 +353,10 @@ def delete_old_range(sheet, range, token):
 
 def update_bid_grid(token):
   headers = { 'Cookie': FANTRAX_LOGIN_COOKIE}
+  BID_GRID_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/Bid Grid'
 
-  base_year = curr_year
-  if not is_offseason:
-    base_year += 1
+  year_response = request_with_retries(f"{BID_GRID_SHEET}/range(address='J2')", {'Authorization': f'Bearer {token}'})
+  base_year = int(year_response.json()['values'][0][0])
 
   # Set up the mapping
   pick_map = {}
@@ -433,8 +445,6 @@ def update_bid_grid(token):
       row.append("Upgrade" if can_upgrade else "No")
 
     rows.append(row)
-
-  BID_GRID_SHEET = f'{CAPFRIENDLY_GRAPH_URL_ROOT}/worksheets/Bid Grid'
 
   print("Updating Bid Grid...")
   unprotect_sheet(BID_GRID_SHEET, token)

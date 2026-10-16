@@ -1,11 +1,13 @@
 mdhhockey.egg-info*
+mdh.venv/
 *.DS_Store*
 *__pycache__*
 
 cronjob.log
-mdhhockey/config.cfg
-mdhhockey/inputs/fantrax_export_latest.csv
-mdhhockey/outputs
-mdhhockey/response_cache
-mdhhockey/response_cache_bak
-
+LineupCheck/lineup_check.log
+LineupCheck/.lineup_check_state.json
+config.cfg
+CapFriendly/inputs/fantrax_export_latest.csv
+CapFriendly/outputs
+CapFriendly/response_cache
+CapFriendly/response_cache_bak

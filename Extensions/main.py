@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 from typing import Iterable
 
 import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from discord_webhook import DiscordWebhookError, post_to_discord
 from extension_announcement import (

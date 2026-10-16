@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
+from owner_tags import format_owner
+
 DEFAULT_SHEET = "Extensions Research"
 DEFAULT_BID_GRID_SHEET = "Bid Grid"
 BID_GRID_ROW_LIMIT = 21
@@ -207,29 +209,6 @@ def bid_grid_decision(
         f"Bid Grid says to upgrade {owner!r} from {original.picks!r}, "
         "but no higher compensation tier is marked Yes."
     )
-
-owner_map = {
-    "2PRO": "<@313547033526927361>",
-    "BAR": "<@220731816099840000>",
-    "BJS": "<@243201978191052800>",
-    "BR0KE": "<@230875413423980545>",
-    "CCHT": "<@486366622785994753>",
-    "CHZ": "<@229287970186723339>",
-    "CTU": "<@484443690610458624>",
-    "DADS": "<@447077568403865620>",
-    "DWM": "<@228258453599027200>",
-    "EXP": "<@282997586020007937>",
-    "GetRekt": "<@235638450064326657>",
-    "HOGS": "<@785166734318764042>",
-    "KINTO": "<@795705765049401364>",
-    "SSH": "<@86530833749401600>",
-    "SSKL": "<@222830283399888897>",
-    "THFM": "<@256358277955321856>",
-    "WRINGS": "<@364650172141273089>",
-    "WTM": "<@274957566143102976>",
-}
-def format_owner(owner: str) -> str:
-    return owner_map[owner]
 
 def parse_player_row(row: list[Any]) -> Player:
     try:

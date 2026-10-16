@@ -2,13 +2,14 @@ import atexit
 import configparser
 import msal
 import os
+from pathlib import Path
 
 # Config File (for vars that shouldn't be uploaded to GitHub)
 config = configparser.ConfigParser()
-config.read(['/home/jeremy/mdh-hockey/mdhhockey/config.cfg'])
+config.read([Path(__file__).with_name('config.cfg')])
 
 # Root of the project to ensure absolute paths
-PROJECT_ROOT = config['project']['root']
+PROJECT_ROOT = config['project']['capfriendly_root']
 
 # Directories to cache GET requests in
 CACHE_DIR = f'{PROJECT_ROOT}/response_cache'
@@ -32,6 +33,9 @@ FANTRAX_LOGIN_COOKIE = config['fantrax']['cookie']
 
 # Discord Variables
 DISCORD_WEBHOOK_URL = config.get('discord', 'webhook_url', fallback='')
+LINEUP_DISCORD_WEBHOOK_URL = config.get(
+    'discord', 'lineup_webhook_url', fallback=''
+)
 
 # Map of fantrax page IDs to team abbreviations
 FANTRAX_TEAM_MAP = {

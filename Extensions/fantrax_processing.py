@@ -20,7 +20,7 @@ ACQUISITION_LABELS = {"ADD", "CLAIM", "CLAIM - FA"}
 REQUEST_TIMEOUT = 30
 
 def fantrax_session() -> requests.Session:
-    from mdhhockey.helpers import FANTRAX_LOGIN_COOKIE
+    from helpers import FANTRAX_LOGIN_COOKIE
 
     session = requests.Session()
     session.headers.update({"Cookie": FANTRAX_LOGIN_COOKIE})
@@ -30,7 +30,7 @@ def fetch_transaction_rows(
     limit: int = TRANSACTION_LIMIT,
 ) -> list[dict[str, Any]]:
     """Load the transaction table once for all claim-related consumers."""
-    from mdhhockey.helpers import (
+    from helpers import (
         FANTRAX_LEAGUE_ID,
         FANTRAX_LEAGUE_URL,
         FANTRAX_LOGIN_COOKIE,
@@ -118,7 +118,7 @@ def claim_bids_from_transactions(
     rows: list[dict[str, Any]],
 ) -> dict[str, list[ClaimBid]]:
     """Extract bids without loading transaction history again."""
-    from mdhhockey.helpers import FANTRAX_TEAM_MAP
+    from helpers import FANTRAX_TEAM_MAP
 
     claims: dict[str, list[ClaimBid]] = {}
     for row in rows:
@@ -198,7 +198,7 @@ def _commissioner_action_error(response: requests.Response) -> str | None:
 
 def process_free_agent_claims(session: requests.Session) -> None:
     """Execute the commissioner free-agent claim action once."""
-    from mdhhockey.helpers import FANTRAX_LEAGUE_ID, FANTRAX_LEAGUE_URL
+    from helpers import FANTRAX_LEAGUE_ID, FANTRAX_LEAGUE_URL
 
     hub_url = (
         "https://www.fantrax.com/fantasy/league/"

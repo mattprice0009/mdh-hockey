@@ -187,7 +187,7 @@ class AnnouncementTests(unittest.TestCase):
         )
 
         warning = (
-            f"⚠️ Bid Grid: {format_owner('WRINGS')}'s "
+            f"⚠️ {format_owner('WRINGS')}'s "
             f"{format_money(Decimal('3000001'))} bid "
             "on Aliaksei Protas requires 2nd compensation, but their entry is No."
         )
@@ -215,7 +215,7 @@ class AnnouncementTests(unittest.TestCase):
             bid_grid,
         )
 
-        self.assertNotIn("⚠️ Bid Grid:", output)
+        self.assertNotIn("⚠️", output)
 
     def test_upgrade_increases_compensation_until_next_yes_and_flags_it(self):
         bid_grid = BID_GRID_VALUES + [
@@ -247,7 +247,7 @@ class AnnouncementTests(unittest.TestCase):
             output,
         )
         self.assertIn(
-            f"⚠️ Bid Grid: {format_owner('WRINGS')}'s "
+            f"⚠️ {format_owner('WRINGS')}'s "
             f"{format_money(Decimal('3000001'))} bid "
             "on Aliaksei Protas upgrades compensation from 2nd to 2x 1st "
             "(the next Yes).",
@@ -305,7 +305,7 @@ class AnnouncementTests(unittest.TestCase):
         )
         self.assertEqual(
             lines[matching_index + 2],
-            f"<a:goalsiren:1354137595424014470> We have a tie! If "
+            f"🚨 We have a tie! If "
             f"{format_owner('2PRO')} decides to "
             f"match, it ends there. If {format_owner('2PRO')} does not match, "
             "then we will begin the tiebreaker process where "
@@ -326,8 +326,8 @@ class ExtensionDataTests(unittest.TestCase):
         with self.assertRaisesRegex(AnnouncementError, "cell AB8"):
             infer_next_group([])
 
-    @patch("mdhhockey.helpers.CAPFRIENDLY_GRAPH_URL_ROOT", "https://graph.test/workbook")
-    @patch("mdhhockey.helpers._acquire_azure_token")
+    @patch("helpers.CAPFRIENDLY_GRAPH_URL_ROOT", "https://graph.test/workbook")
+    @patch("helpers._acquire_azure_token")
     @patch("extension_data.requests.patch")
     def test_updates_posted_group_cell(self, request_patch, acquire_token):
         acquire_token.return_value = {"access_token": "excel-token"}

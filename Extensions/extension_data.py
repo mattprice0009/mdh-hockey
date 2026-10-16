@@ -39,7 +39,7 @@ def infer_next_group(values: list[list[Any]]) -> int:
     return next_group
 
 def fetch_sheet_values(sheet_name: str) -> list[list[Any]]:
-    from mdhhockey.helpers import CAPFRIENDLY_GRAPH_URL_ROOT, _acquire_azure_token
+    from helpers import CAPFRIENDLY_GRAPH_URL_ROOT, _acquire_azure_token
 
     token_result = _acquire_azure_token()
     token = token_result.get("access_token")
@@ -63,7 +63,7 @@ def fetch_sheet_values(sheet_name: str) -> list[list[Any]]:
 
 def update_posted_group(group: int) -> None:
     """Record the most recently posted extension group in the workbook."""
-    from mdhhockey.helpers import CAPFRIENDLY_GRAPH_URL_ROOT, _acquire_azure_token
+    from helpers import CAPFRIENDLY_GRAPH_URL_ROOT, _acquire_azure_token
 
     token_result = _acquire_azure_token()
     token = token_result.get("access_token")
@@ -85,7 +85,7 @@ def update_posted_group(group: int) -> None:
     response.raise_for_status()
 
 def fetch_recent_claims(limit: int = TRANSACTION_LIMIT) -> dict[str, list[ClaimBid]]:
-    from mdhhockey.helpers import (
+    from helpers import (
         FANTRAX_LEAGUE_ID,
         FANTRAX_LEAGUE_URL,
         FANTRAX_LOGIN_COOKIE,

@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from mdhhockey.helpers import DISCORD_WEBHOOK_URL
+from helpers import DISCORD_WEBHOOK_URL
 
 DISCORD_CONTENT_LIMIT = 2_000
 
@@ -16,10 +16,12 @@ class DiscordWebhookError(RuntimeError):
 def post_to_discord(
     content: str,
     *,
+    webhook_url: str | None = None,
     timeout: float = 30,
 ) -> dict[str, Any]:
     """Post content and return Discord's created-message response."""
-    if not DISCORD_WEBHOOK_URL.strip():
+    target_url = DISCORD_WEBHOOK_URL if webhook_url is None else webhook_url
+    if not target_url.strip():
         raise DiscordWebhookError("Discord webhook URL is not configured.")
     if not content.strip():
         raise DiscordWebhookError("Discord webhook content cannot be empty.")
@@ -29,7 +31,7 @@ def post_to_discord(
         )
 
     response = requests.post(
-        DISCORD_WEBHOOK_URL,
+        target_url,
         params={"wait": "true"},
         json={"content": content},
         timeout=timeout,
