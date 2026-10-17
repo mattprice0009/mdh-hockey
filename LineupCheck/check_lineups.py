@@ -705,12 +705,10 @@ def main(argv: Iterable[str] | None = None) -> int:
             for team_id, data in raw_rosters
         ]
         issues = [issue for roster in rosters if (issue := find_issue(roster))]
-        current_day_issue_team_ids = {issue.team_id for issue in issues}
         illegal_rosters = [
             roster
             for roster in rosters
             if roster.illegal_roster_warning
-            and roster.team_id in current_day_issue_team_ids
         ]
         report = format_report(
             issues,
